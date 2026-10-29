@@ -7,12 +7,13 @@ Application pédagogique Java 25 LTS, Spring Boot 4.1.1, Vue 3, TypeScript, Pini
 Installer Docker Desktop (ou Docker Engine + Compose), ouvrir ce dossier et exécuter :
 
 ```sh
+cp .env.example .env   # puis choisir DEMO_PASSWORD (.env n’est pas versionné)
 docker compose up -d --build
 ```
 
 Ouvrir http://localhost:8088. Le premier démarrage télécharge les images et dépendances. Vérifier `docker compose ps` puis `docker compose logs backend` si nécessaire.
 
-Compte : `patient@medislot.test` / `MediSlot-demo-2026!`.
+Compte : `patient@medislot.test`, mot de passe = valeur de `DEMO_PASSWORD` dans `.env`.
 Second patient : `autre@medislot.test`, même mot de passe. On peut aussi créer un compte depuis l’interface.
 
 Le navigateur passe par Nginx. `/api` rejoint Spring. PostgreSQL utilise un volume persistant. Les disponibilités fictives couvrent les dix jours suivant la première initialisation. Pour des sessions de formation ultérieures, renouveler les créneaux en base ou utiliser un nouveau nom de projet Compose avec `docker compose -p medislot-nouvelle-session up -d --build` après avoir arrêté l’ancien projet. Ne pas effacer un volume contenant un travail à conserver.

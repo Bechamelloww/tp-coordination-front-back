@@ -24,7 +24,9 @@ management:
       exposure:
         include: health,info
 medislot:
-  demo-seed: ${DEMO_SEED:true}
+  # Comptes de démo désactivés par défaut ; le mot de passe vient de DEMO_PASSWORD, jamais du code.
+  demo-seed: ${DEMO_SEED:false}
+  demo-password: ${DEMO_PASSWORD:}
   ab:
     enabled: ${AB_ENABLED:true}
     max-participants: ${AB_MAX_PARTICIPANTS:10}
