@@ -19,6 +19,7 @@ services:
       DATABASE_URL: jdbc:postgresql://db:5432/medislot
       DB_PASSWORD: ${DB_PASSWORD:-medislot-local-only}
       DEMO_SEED: "true"
+      DEMO_PASSWORD: ${DEMO_PASSWORD:?Definir DEMO_PASSWORD dans .env (voir .env.example)}
       AB_ENABLED: "true"
       AB_MAX_PARTICIPANTS: "10"
       AB_TOKEN_SECRET: ${AB_TOKEN_SECRET:-medislot-ab-local-only-secret-change-me}
