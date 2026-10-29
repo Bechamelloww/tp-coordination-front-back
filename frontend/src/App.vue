@@ -123,7 +123,7 @@ onBeforeUnmount(()=>document.removeEventListener('keydown',trap));
     <div class="field"><label for="auth-email">Adresse e-mail</label><input id="auth-email" v-model="email" type="email" required autocomplete="email" :aria-invalid="!!fieldErrors.email" :aria-describedby="describedBy(!!fieldErrors.email&&'auth-email-error')"><p id="auth-email-error" class="error-text"><template v-if="fieldErrors.email">Erreur : {{fieldErrors.email}}</template></p></div>
     <div class="field"><label for="auth-password">Mot de passe</label><p v-if="register" id="auth-password-hint" class="hint">12 caractères au moins.</p><input id="auth-password" v-model="password" type="password" required maxlength="72" :autocomplete="register?'new-password':'current-password'" :aria-invalid="!!fieldErrors.password" :aria-describedby="describedBy(!!fieldErrors.password&&'auth-password-error',register&&'auth-password-hint')"><p id="auth-password-error" class="error-text"><template v-if="fieldErrors.password">Erreur : {{fieldErrors.password}}</template></p></div>
     <p role="alert" class="error-text"><template v-if="authError">{{authError}}</template></p>
-    <button class="primary" :aria-disabled="busy">{{busy?'Connexion…':register?'Créer mon compte':'Se connecter'}}</button>
+    <button type="submit" class="primary" :aria-disabled="busy">{{busy?'Connexion…':register?'Créer mon compte':'Se connecter'}}</button>
    </form>
    <button class="text-button" @click="toggleRegister">{{register?'J’ai déjà un compte':'Créer un compte'}}</button><details class="demo-credentials"><summary>Compte de démonstration</summary><p>patient@medislot.test<br>MediSlot-demo-2026!</p></details></template>
   <template v-else-if="modalKind==='booking'"><BookingForm/></template>
