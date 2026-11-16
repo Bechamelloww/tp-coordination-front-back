@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {ref,computed,onMounted,onBeforeUnmount,watch,nextTick,defineAsyncComponent} from 'vue';import {usePosition} from './composables/usePosition';import {distanceKm,autourDe,formatDistance,lienCabinet,RAYON_KM,type Proche} from './geo';import ProfessionalCard from './components/ProfessionalCard.vue';import BookingForm from './components/BookingForm.vue';import ConvocationButton from './components/ConvocationButton.vue';import GoogleCalendarCard from './components/GoogleCalendarCard.vue';import {readGoogleReturn,realBrowser as googleBrowser} from './googleCalendar';import {googleLoginEnabled,startGoogleLogin,readLoginReturn} from './googleLogin';import NetworkBanner from './components/NetworkBanner.vue';import {api,ApiError} from './api';import {useSession} from './stores/session';import {useLive} from './composables/useLive';import {useExperiment} from './stores/experiment';import {useBookingDraft,loadDraft,discardDraft} from './stores/bookingDraft';import {flush} from './offline/flush';import {upcomingByPro} from './offline/bookingRules';import {clearOfflineData} from './offline/clean';import type {StoredDraft} from './offline/types';import {specialties,dateLabel,timeLabel,type Professional,type Slot,type Page,type Appointment,type Notice} from './types';
+import {useClinic} from './stores/clinic';import ClinicSwitcher from './components/ClinicSwitcher.vue';import {withClinic} from './tenant';
 // Carte « Autour de moi » chargée à la demande (Leaflet n'alourdit pas la page d'accueil).
 const NearbyMap=defineAsyncComponent(()=>import('./components/NearbyMap.vue'));
 const localisation=usePosition();
@@ -8,7 +9,7 @@ const localisation=usePosition();
 const autour=ref(false),proches=ref<Proche[]>([]);
 /** Distance à vol d'oiseau depuis la position de la personne, calculée dans le navigateur ; null si inconnue. */
 function distanceDe(p:Professional):number|null{const pos=localisation.position.value;return pos&&p.latitude!=null&&p.longitude!=null?distanceKm(pos,{latitude:p.latitude,longitude:p.longitude}):null}
-const session=useSession(),live=useLive(),personalLive=useLive(),ab=useExperiment(),booking=useBookingDraft();
+const session=useSession(),clinic=useClinic(),live=useLive(),personalLive=useLive(),ab=useExperiment(),booking=useBookingDraft();
 const view=ref<'search'|'appointments'>('search'),loading=ref(false),busy=ref(false),error=ref(''),success=ref('');
 const q=ref(''),city=ref(''),specialty=ref(''),page=ref(0),total=ref(0),doctors=ref<Professional[]>([]),slots=ref<Record<number,Slot[]>>({});
 const appointments=ref<Appointment[]>([]),notices=ref<Notice[]>([]),showNotices=ref(false),profile=ref<Professional|null>(null);
@@ -104,9 +105,19 @@ function myAppointments(){if(!session.user){openAuth();return;}view.value='appoi
 // Bonus : un brouillon relu au démarrage est proposé (« Reprendre » ou « Recommencer ») ; une demande en attente repart seule.
 function resume(){if(offer.value)booking.resume(offer.value);offer.value=null}
 async function restart(){if(offer.value)await discardDraft(offer.value.userId).catch(()=>{});offer.value=null}
+function connectPersonal(){personalLive.connect(withClinic('/api/notifications/events'),()=>{refreshNotices().catch(()=>{});refreshAppointments().catch(()=>{})},'notifications-changed')}
+// Changement de cabinet : l'écran repart de zéro, les flux temps réel sont rouverts sur le nouveau cabinet.
+async function onClinicChanged(){
+ moveId.value=null;chosen.value=null;profile.value=null;history.value=null;cancelId.value=null;success.value='';error.value='';
+ appointments.value=[];notices.value=[];slots.value={};
+ live.connect(withClinic('/api/events'),()=>loadSlots().catch(()=>{}));
+ if(session.user){connectPersonal();refreshNotices().catch(()=>{});refreshAppointments().catch(()=>{})}
+ await search(true);
+}
 watch(()=>session.user,async user=>{personalLive.close();offer.value=null;
- if(!user){ab.reset();booking.forget();return}
- ab.load(user.id);refreshNotices().catch(()=>{});refreshAppointments().catch(()=>{});personalLive.connect('/api/notifications/events',()=>{refreshNotices().catch(()=>{});refreshAppointments().catch(()=>{})},'notifications-changed');
+ if(!user){ab.reset();booking.forget();clinic.reset();return}
+ clinic.loadMine().catch(()=>{});
+ ab.load(user.id);refreshNotices().catch(()=>{});refreshAppointments().catch(()=>{});connectPersonal();
  const d=await loadDraft(user.id).catch(()=>null);
  if(!d||booking.draft||session.user?.id!==user.id)return;
  if(d.status==='pending'){booking.restorePending(d);void flush()}else offer.value=d;
@@ -118,15 +129,16 @@ watch(()=>booking.needsLogin,async needed=>{if(!needed)return;success.value='';e
 onMounted(async()=>{document.addEventListener('keydown',trap);
  const googleReturn=readGoogleReturn(googleBrowser),loginReturn=readLoginReturn(googleBrowser);
  googleLoginEnabled().then(v=>googleLogin.value=v);
+ try{await clinic.init()}catch(e){error.value=message(e);return}
  await search();try{await session.load()}catch(e){error.value=message(e)}
  if(loginReturn&&loginReturn.outcome==='google'&&session.user)success.value=loginReturn.message;else if(loginReturn&&loginReturn.outcome!=='google'){openAuth();authError.value=loginReturn.message;}
  if(googleReturn){success.value=googleReturn.message;if(session.user){view.value='appointments';refreshAppointments().catch(e=>error.value=message(e));}}
- live.connect('/api/events',()=>loadSlots().catch(()=>{}));});
+ live.connect(withClinic('/api/events'),()=>loadSlots().catch(()=>{}));});
 onBeforeUnmount(()=>document.removeEventListener('keydown',trap));
 </script>
 <template>
  <a href="#main" class="skip">Aller au contenu</a>
- <header class="header"><button class="brand" @click="view='search';moveId=null">MediSlot<span class="brand-dot">.</span></button><nav aria-label="Navigation principale"><button :aria-current="view==='search'?'page':undefined" @click="view='search'">Trouver un praticien</button><button :aria-current="view==='appointments'?'page':undefined" @click="myAppointments">Mes rendez-vous</button><button v-if="session.user" @click="showNotices=!showNotices" :aria-expanded="showNotices">Notifications <span class="count">{{notices.length}}</span></button><button v-if="!session.user" class="login" @click="openAuth">Se connecter</button><button v-else class="login" @click="logout">{{session.user.name.split(' ')[0]}} · Déconnexion</button></nav></header>
+ <header class="header"><button class="brand" @click="view='search';moveId=null">MediSlot<span class="brand-dot">.</span></button><ClinicSwitcher @switched="onClinicChanged"/><nav aria-label="Navigation principale"><button :aria-current="view==='search'?'page':undefined" @click="view='search'">Trouver un praticien</button><button :aria-current="view==='appointments'?'page':undefined" @click="myAppointments">Mes rendez-vous</button><button v-if="session.user" @click="showNotices=!showNotices" :aria-expanded="showNotices">Notifications <span class="count">{{notices.length}}</span></button><button v-if="!session.user" class="login" @click="openAuth">Se connecter</button><button v-else class="login" @click="logout">{{session.user.name.split(' ')[0]}} · Déconnexion</button></nav></header>
  <!-- Une seule région principale : elle commence au bandeau de recherche et à son h1 (cible du lien d'évitement). -->
  <main id="main" tabindex="-1">
  <NetworkBanner/>

@@ -6,20 +6,11 @@ import fr.medislot.experiment.AbTokens;
 import fr.medislot.repository.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.server.ResponseStatusException;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 import java.time.*;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
-@SpringBootTest @Testcontainers
-class AbExperimentIntegrationTest {
- @Container static PostgreSQLContainer db=new PostgreSQLContainer("postgres:18");
- @DynamicPropertySource static void database(DynamicPropertyRegistry r){r.add("spring.datasource.url",db::getJdbcUrl);r.add("spring.datasource.username",db::getUsername);r.add("spring.datasource.password",db::getPassword);r.add("medislot.demo-seed",()->"true");r.add("medislot.demo-password",()->java.util.UUID.randomUUID().toString());}
+class AbExperimentIntegrationTest extends PostgresTestBase {
  @Autowired AbService ab; @Autowired AbTokens tokens; @Autowired BookingService booking; @Autowired UserRepository users; @Autowired SlotRepository slots;
  private AppUser user(String email){AppUser u=new AppUser();u.email=email;u.name="Patient test";u.password="non-utilisé";u.role="PATIENT";return users.save(u);}
  private AbService.VariantMetrics metrics(String variant){return ab.metrics().variants().stream().filter(m->m.variant().equals(variant)).findFirst().orElseThrow();}

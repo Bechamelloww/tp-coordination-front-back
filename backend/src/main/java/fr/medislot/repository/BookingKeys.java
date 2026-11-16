@@ -1,4 +1,5 @@
 package fr.medislot.repository;
+import fr.medislot.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -15,10 +16,10 @@ public class BookingKeys {
  private final JdbcTemplate jdbc;
  public BookingKeys(JdbcTemplate jdbc){this.jdbc=jdbc;}
  public Optional<Entry> find(Long patientId,UUID key){
-  return jdbc.query("select slot_id,appointment_id from booking_key where patient_id=? and idem_key=?",(rs,i)->new Entry(rs.getLong(1),rs.getLong(2)),patientId,key).stream().findFirst();
+  return jdbc.query("select slot_id,appointment_id from booking_key where clinic_id=? and patient_id=? and idem_key=?",(rs,i)->new Entry(rs.getLong(1),rs.getLong(2)),TenantContext.get(),patientId,key).stream().findFirst();
  }
  public void save(Long patientId,UUID key,Long slotId,Long appointmentId){
-  jdbc.update("insert into booking_key(patient_id,idem_key,slot_id,appointment_id,created_at) values (?,?,?,?,?)",patientId,key,slotId,appointmentId,Timestamp.from(Instant.now()));
+  jdbc.update("insert into booking_key(clinic_id,patient_id,idem_key,slot_id,appointment_id,created_at) select s.clinic_id,?,?,s.id,?,? from slot s where s.id=?",patientId,key,appointmentId,Timestamp.from(Instant.now()),slotId);
  }
  @Scheduled(fixedDelay=3_600_000) public void purge(){jdbc.update("delete from booking_key where created_at<?",Timestamp.from(Instant.now().minus(RETENTION)));}
 }

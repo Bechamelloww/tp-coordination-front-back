@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import fr.medislot.PostgresTestBase;
 import fr.medislot.application.BookingService;
 import fr.medislot.domain.Appointment;
 import fr.medislot.domain.Slot;
@@ -28,36 +29,22 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.util.UriComponentsBuilder;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
-@SpringBootTest
-@Testcontainers
-class GoogleCalendarIntegrationTest {
+class GoogleCalendarIntegrationTest extends PostgresTestBase {
  private static final String PATIENT = "patient@medislot.test";
  private static final Duration WAIT_LIMIT = Duration.ofSeconds(10);
  private static final Queue<String> googleRequests = new ConcurrentLinkedQueue<>();
  private static final AtomicBoolean googleDown = new AtomicBoolean(false);
  private static final HttpServer fakeGoogle = startFakeGoogle();
 
- @Container
- static PostgreSQLContainer database = new PostgreSQLContainer("postgres:18");
-
  @DynamicPropertySource
  static void properties(DynamicPropertyRegistry registry) {
   String fakeGoogleUrl = "http://localhost:" + fakeGoogle.getAddress().getPort();
-  registry.add("spring.datasource.url", database::getJdbcUrl);
-  registry.add("spring.datasource.username", database::getUsername);
-  registry.add("spring.datasource.password", database::getPassword);
-  registry.add("medislot.demo-seed", () -> "true");
-  registry.add("medislot.demo-password", () -> UUID.randomUUID().toString());
   registry.add("medislot.google.client-id", () -> "client-id-test");
   registry.add("medislot.google.client-secret", () -> "client-secret-test");
   registry.add("medislot.google.token-key", () -> GoogleTestProperties.TOKEN_KEY);

@@ -1,3 +1,4 @@
+import {currentClinic} from './tenant';
 let csrf:{token:string;headerName:string}|null=null;
 // Corps ProblemDetail (RFC 9457) renvoyé par Spring, avec les extensions de MediSlot.
 export interface Problem {title?:string;detail?:string;code?:string;professionalId?:number;errors?:{field:string;message:string}[]}
@@ -13,6 +14,7 @@ export class ApiError extends Error {
 export async function refreshCsrf(){const r=await fetch('/api/csrf',{credentials:'same-origin'});if(!r.ok)throw new ApiError('Impossible de sécuriser la session.',r.status);csrf=await r.json();}
 export async function api<T>(path:string,init:RequestInit={}):Promise<T>{
  const method=(init.method||'GET').toUpperCase();const headers=new Headers(init.headers);
+ const clinic=currentClinic();if(clinic)headers.set('X-Clinic',clinic);
  if(!['GET','HEAD','OPTIONS'].includes(method)){if(!csrf)await refreshCsrf();headers.set(csrf!.headerName,csrf!.token);}
  if(init.body&&!(init.body instanceof URLSearchParams))headers.set('Content-Type','application/json');
  const response=await fetch('/api'+path,{...init,headers,credentials:'same-origin'});
