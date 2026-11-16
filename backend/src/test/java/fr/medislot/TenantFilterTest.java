@@ -137,7 +137,7 @@ class TenantFilterTest {
  }
 
  @Test void lesAppelsSansCabinetNeSontPasFiltres() throws Exception {
-  for (String path : new String[]{"/api/csrf", "/api/login", "/api/me", "/api/me/clinics", "/api/ab/assignment", "/api/google/callback", "/actuator/health"}) {
+  for (String path : new String[]{"/api/csrf", "/api/login", "/api/me", "/api/me/clinics", "/api/ab/assignment", "/api/google/callback", "/api/auth/google/start", "/actuator/health"}) {
    run(request(path, null));
    assertEquals(200, res.getStatus(), path);
   }

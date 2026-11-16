@@ -26,7 +26,7 @@ public class TenantFilter extends OncePerRequestFilter {
  public static final String PARAM = "clinic";
  static final Pattern SLUG = Pattern.compile("^[a-z0-9]+(-[a-z0-9]+)*$");
  // Appels qui ne dépendent pas d'un cabinet : session, comptes, expériences A/B, retour OAuth Google.
- static final java.util.List<String> NO_CLINIC = java.util.List.of("/api/csrf", "/api/login", "/api/logout", "/api/me", "/api/ab/", "/api/google/");
+ static final java.util.List<String> NO_CLINIC = java.util.List.of("/api/csrf", "/api/login", "/api/logout", "/api/me", "/api/ab/", "/api/google/", "/api/auth/google/");
 
  private final ClinicRepository clinics;
  private final MembershipRepository memberships;
