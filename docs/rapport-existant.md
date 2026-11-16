@@ -88,7 +88,7 @@ Session serveur + cookie HttpOnly, SameSite=Lax, `Secure` désactivé en local (
 | Intégration back | `BookingIntegrationTest` (Testcontainers PostgreSQL) : 2 réservations concurrentes donnent `201` + `409` ; annulation par un tiers = `404`, historique conservé. |
 | Unitaire front | `api.test.ts` (Vitest). |
 | Bout en bout | Playwright : réservation + annulation, inscription, conformité au contrat OpenAPI (ajv). |
-| CI | `.github/workflows/ci.yml` : jobs back, front et e2e ; actions épinglées par commit ; Dependabot. Non exécutée sur un dépôt distant (README). |
+| CI | `.github/workflows/ci.yml` : jobs back, front et e2e ; actions épinglées par commit. Non exécutée sur un dépôt distant (README). |
 
 Le dossier **n'est pas un dépôt git**.
 

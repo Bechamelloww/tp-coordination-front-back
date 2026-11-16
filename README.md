@@ -55,7 +55,7 @@ Docker doit fonctionner pour les tests PostgreSQL Testcontainers. Les tests bout
 
 ## GitHub Actions
 
-Faire de **ce dossier application** la racine du dépôt GitHub. `ci.yml` contient les jobs back, front et bout en bout. `release.yml` relance la vérification puis construit des images téléchargeables à la demande si les tests réussissent. Les actions sont épinglées à des commits et Dependabot propose les mises à jour.
+Faire de **ce dossier application** la racine du dépôt GitHub. `ci.yml` contient les jobs back, front et bout en bout. `release.yml` relance la vérification puis construit des images téléchargeables à la demande si les tests réussissent. Les actions sont épinglées à des commits.
 
 Les workflows n’ont pas été exécutés sur un dépôt GitHub distant pendant la fabrication du support. Les commandes de compilation, tests et Compose ont été exécutées localement. Le déploiement vers un hébergeur nécessite sa configuration et ses secrets. Paramétrer les règles de protection de `main`, les checks requis et les reviewers de l’environnement `staging` dans GitHub.
 
