@@ -22,7 +22,7 @@ public class SecurityConfig {
     chain.doFilter(request,response);
    },UsernamePasswordAuthenticationFilter.class);
   http.authorizeHttpRequests(a->a.dispatcherTypeMatchers(DispatcherType.ASYNC,DispatcherType.ERROR).permitAll()
-    .requestMatchers("/api/csrf","/api/register","/api/login","/api/professionals/**","/api/events","/api/ab/metrics","/api/google/callback","/actuator/health").permitAll()
+    .requestMatchers("/api/csrf","/api/register","/api/login","/api/professionals/**","/api/events","/api/ab/metrics","/api/google/callback","/api/auth/google/**","/actuator/health").permitAll()
     .requestMatchers("/api/**").authenticated().anyRequest().permitAll())
    .requestCache(c->c.disable())
    .formLogin(f->f.loginProcessingUrl("/api/login")

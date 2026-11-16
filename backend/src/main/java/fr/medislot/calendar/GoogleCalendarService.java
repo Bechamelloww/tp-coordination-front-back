@@ -261,7 +261,7 @@ public class GoogleCalendarService {
   return URL_ENCODER.encodeToString(bytes);
  }
 
- static String codeChallenge(String codeVerifier) {
+ public static String codeChallenge(String codeVerifier) {
   try {
    byte[] digest = MessageDigest.getInstance("SHA-256").digest(codeVerifier.getBytes(StandardCharsets.US_ASCII));
    return URL_ENCODER.encodeToString(digest);
