@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {ref,computed,onMounted,onBeforeUnmount,watch,nextTick,defineAsyncComponent} from 'vue';import {usePosition} from './composables/usePosition';import {distanceKm,autourDe,formatDistance,lienCabinet,RAYON_KM,type Proche} from './geo';import ProfessionalCard from './components/ProfessionalCard.vue';import BookingForm from './components/BookingForm.vue';import ConvocationButton from './components/ConvocationButton.vue';import GoogleCalendarCard from './components/GoogleCalendarCard.vue';import {readGoogleReturn,realBrowser as googleBrowser} from './googleCalendar';import NetworkBanner from './components/NetworkBanner.vue';import {api,ApiError} from './api';import {useSession} from './stores/session';import {useLive} from './composables/useLive';import {useExperiment} from './stores/experiment';import {useBookingDraft,loadDraft,discardDraft} from './stores/bookingDraft';import {flush} from './offline/flush';import {upcomingByPro} from './offline/bookingRules';import {clearOfflineData} from './offline/clean';import type {StoredDraft} from './offline/types';import {specialties,dateLabel,timeLabel,type Professional,type Slot,type Page,type Appointment,type Notice} from './types';
+import {ref,computed,onMounted,onBeforeUnmount,watch,nextTick,defineAsyncComponent} from 'vue';import {usePosition} from './composables/usePosition';import {distanceKm,autourDe,formatDistance,lienCabinet,RAYON_KM,type Proche} from './geo';import ProfessionalCard from './components/ProfessionalCard.vue';import BookingForm from './components/BookingForm.vue';import ConvocationButton from './components/ConvocationButton.vue';import GoogleCalendarCard from './components/GoogleCalendarCard.vue';import {readGoogleReturn,realBrowser as googleBrowser} from './googleCalendar';import {googleLoginEnabled,startGoogleLogin,readLoginReturn} from './googleLogin';import NetworkBanner from './components/NetworkBanner.vue';import {api,ApiError} from './api';import {useSession} from './stores/session';import {useLive} from './composables/useLive';import {useExperiment} from './stores/experiment';import {useBookingDraft,loadDraft,discardDraft} from './stores/bookingDraft';import {flush} from './offline/flush';import {upcomingByPro} from './offline/bookingRules';import {clearOfflineData} from './offline/clean';import type {StoredDraft} from './offline/types';import {specialties,dateLabel,timeLabel,type Professional,type Slot,type Page,type Appointment,type Notice} from './types';
 // Carte « Autour de moi » chargée à la demande (Leaflet n'alourdit pas la page d'accueil).
 const NearbyMap=defineAsyncComponent(()=>import('./components/NearbyMap.vue'));
 const localisation=usePosition();
@@ -12,6 +12,7 @@ const session=useSession(),live=useLive(),personalLive=useLive(),ab=useExperimen
 const view=ref<'search'|'appointments'>('search'),loading=ref(false),busy=ref(false),error=ref(''),success=ref('');
 const q=ref(''),city=ref(''),specialty=ref(''),page=ref(0),total=ref(0),doctors=ref<Professional[]>([]),slots=ref<Record<number,Slot[]>>({});
 const appointments=ref<Appointment[]>([]),notices=ref<Notice[]>([]),showNotices=ref(false),profile=ref<Professional|null>(null);
+const googleLogin=ref(false),googleBusy=ref(false);
 const authOpen=ref(false),register=ref(false),email=ref(''),password=ref(''),name=ref(''),authError=ref(''),fieldErrors=ref<Record<string,string>>({});
 // chosen : confirmation d'un déplacement (PATCH). Une nouvelle réservation passe par le formulaire et la file d'envoi.
 const chosen=ref<{professional:Professional;slot:Slot}|null>(null),moveId=ref<number|null>(null),history=ref<{action:string;createdAt:string}[]|null>(null),cancelId=ref<number|null>(null);
@@ -96,6 +97,7 @@ async function move(a:Appointment){moveId.value=a.id;autour.value=false;q.value=
 async function showHistory(id:number){try{history.value=await api(`/appointments/${id}/history`)}catch(e){error.value=message(e)}}
 // Déconnexion volontaire : brouillon et file effacés de l'appareil (une session expirée, elle, garde tout).
 async function logout(){const id=session.user?.id;try{await session.logout();if(id!==undefined)await clearOfflineData(id).catch(()=>{});booking.forget();offer.value=null;ab.clear();personalLive.close();notices.value=[];appointments.value=[];showNotices.value=false;view.value='search';moveId.value=null;}catch(e){error.value=message(e)}}
+async function loginWithGoogle(){if(googleBusy.value)return;googleBusy.value=true;authError.value='';try{await startGoogleLogin(googleBrowser)}catch(e){authError.value=message(e);googleBusy.value=false}}
 function openAuth(){authOpen.value=true;authError.value='';fieldErrors.value={};register.value=false;}
 function toggleRegister(){register.value=!register.value;authError.value='';fieldErrors.value={};}
 function myAppointments(){if(!session.user){openAuth();return;}view.value='appointments';refreshAppointments().catch(e=>error.value=message(e));}
@@ -114,8 +116,10 @@ watch(()=>booking.confirmed,a=>{if(!a)return;error.value='';success.value=`Votre
 // Session expirée pendant la coupure : reconnexion demandée, la demande attend dans IndexedDB.
 watch(()=>booking.needsLogin,async needed=>{if(!needed)return;success.value='';error.value='Votre session a expiré. Reconnectez-vous : votre demande en attente partira ensuite.';await session.load().catch(()=>{});if(!session.user)openAuth();});
 onMounted(async()=>{document.addEventListener('keydown',trap);
- const googleReturn=readGoogleReturn(googleBrowser);
+ const googleReturn=readGoogleReturn(googleBrowser),loginReturn=readLoginReturn(googleBrowser);
+ googleLoginEnabled().then(v=>googleLogin.value=v);
  await search();try{await session.load()}catch(e){error.value=message(e)}
+ if(loginReturn&&loginReturn.outcome==='google'&&session.user)success.value=loginReturn.message;else if(loginReturn&&loginReturn.outcome!=='google'){openAuth();authError.value=loginReturn.message;}
  if(googleReturn){success.value=googleReturn.message;if(session.user){view.value='appointments';refreshAppointments().catch(e=>error.value=message(e));}}
  live.connect('/api/events',()=>loadSlots().catch(()=>{}));});
 onBeforeUnmount(()=>document.removeEventListener('keydown',trap));
@@ -147,6 +151,7 @@ onBeforeUnmount(()=>document.removeEventListener('keydown',trap));
  </main><footer><span class="brand footer-brand">MediSlot.</span><p>Votre parcours de soins, simplement.</p><small>Application de formation · Données fictives · Horaires Europe/Paris</small></footer>
  <div v-if="modalKind" class="overlay" @click.self="closeModal"><section ref="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button class="close" aria-label="Fermer" @click="closeModal">×</button>
   <template v-if="modalKind==='auth'"><p class="eyebrow dark">VOTRE ESPACE MEDISLOT</p><h2 id="modal-title" tabindex="-1">{{register?'Créer votre compte':'Heureux de vous retrouver'}}</h2><p class="subtle">Connectez-vous pour confirmer et retrouver vos rendez-vous.</p>
+   <template v-if="googleLogin"><button type="button" class="google-button" :aria-disabled="googleBusy" @click="loginWithGoogle"><svg aria-hidden="true" viewBox="0 0 48 48" width="20" height="20"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>{{googleBusy?'Redirection vers Google…':'Continuer avec Google'}}</button><p class="auth-separator"><span>ou avec votre e-mail</span></p></template>
    <form class="auth-form" novalidate @submit.prevent="authenticate">
     <p class="form-note">Tous les champs sont obligatoires.</p>
     <div v-if="register" class="field"><label for="auth-name">Votre nom</label><input id="auth-name" v-model="name" required maxlength="120" autocomplete="name" :aria-invalid="!!fieldErrors.name" :aria-describedby="describedBy(!!fieldErrors.name&&'auth-name-error')"><p id="auth-name-error" class="error-text"><template v-if="fieldErrors.name">Erreur : {{fieldErrors.name}}</template></p></div>
