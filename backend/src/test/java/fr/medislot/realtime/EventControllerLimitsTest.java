@@ -1,5 +1,8 @@
 package fr.medislot.realtime;
 import fr.medislot.application.BookingService;
+import fr.medislot.tenant.TenantContext;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.*;
@@ -7,6 +10,8 @@ import static org.mockito.Mockito.*;
 class EventControllerLimitsTest {
  final BookingService booking=mock(BookingService.class);
  final EventController events=new EventController(booking);
+ @BeforeEach void clinic(){TenantContext.set(1L);}
+ @AfterEach void clear(){TenantContext.clear();}
 
  @Test void publicStreamRefusesBeyondItsCap(){
   for(int i=0;i<EventController.MAX_PUBLIC;i++)events.publicEvents();

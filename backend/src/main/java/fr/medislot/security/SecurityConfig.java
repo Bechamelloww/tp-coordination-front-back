@@ -16,8 +16,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
  @Bean PasswordEncoder encoder(){return new BCryptPasswordEncoder();}
  @Bean UserDetailsService users(UserRepository users){return email -> users.findByEmail(email.toLowerCase(java.util.Locale.ROOT)).map(u->User.withUsername(u.email).password(u.password).roles(u.role).build()).orElseThrow(()->new UsernameNotFoundException("Identité inconnue"));}
- @Bean SecurityFilterChain filter(HttpSecurity http,ClinicRepository clinics,MembershipRepository memberships,UserRepository users) throws Exception {
- @Bean SecurityFilterChain filter(HttpSecurity http,LoginAttempts attempts) throws Exception {
+ @Bean SecurityFilterChain filter(HttpSecurity http,ClinicRepository clinics,MembershipRepository memberships,UserRepository users,LoginAttempts attempts) throws Exception {
   http.addFilterBefore((request,response,chain)->{
     var req=(jakarta.servlet.http.HttpServletRequest)request;var res=(jakarta.servlet.http.HttpServletResponse)response;
     if("POST".equals(req.getMethod())&&"/api/login".equals(req.getRequestURI().substring(req.getContextPath().length()))&&attempts.blocked(req.getParameter("username"))){
