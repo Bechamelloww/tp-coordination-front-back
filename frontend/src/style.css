@@ -18,3 +18,4 @@
 .appointment-actions>button[aria-busy=true]{cursor:progress;opacity:.75}
 /* Un seul rendez-vous à venir par praticien : à la place des créneaux, le rendez-vous existant. */
 .booked-note{border:1px solid #c6d7e3;border-radius:8px;background:#f3f8fb;padding:12px 14px}.booked-note p{margin:0 0 6px}
+.google-button{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;margin:22px 0 0;padding:13px 20px;border:1px solid #6f8798;border-radius:8px;background:white;color:#1f1f1f;font-weight:600}.google-button:hover{background:#f3f7fa}.auth-separator{display:flex;align-items:center;gap:12px;margin:20px 0 0;font-size:13px;color:var(--muted)}.auth-separator::before,.auth-separator::after{content:"";flex:1;border-top:1px solid var(--line)}

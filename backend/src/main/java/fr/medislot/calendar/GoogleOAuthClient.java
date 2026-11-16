@@ -15,6 +15,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 @Component
 public class GoogleOAuthClient {
  public static final String CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.app.created";
+ /** Connexion « Continuer avec Google » : identité seulement (OpenID Connect), aucune donnée Google au-delà. */
+ public static final String LOGIN_SCOPE = "openid email profile";
  private static final ParameterizedTypeReference<Map<String, Object>> JSON_OBJECT = new ParameterizedTypeReference<>() {
  };
 
@@ -22,6 +24,10 @@ public class GoogleOAuthClient {
   public boolean includesCalendarScope() {
    return grantedScopes != null && java.util.Arrays.asList(grantedScopes.split(" ")).contains(CALENDAR_SCOPE);
   }
+ }
+
+ /** Identité renvoyée par Google : e-mail, e-mail vérifié par Google, nom affiché. */
+ public record GoogleIdentity(String email, boolean emailVerified, String name) {
  }
 
  private final GoogleProperties properties;
@@ -51,6 +57,43 @@ public class GoogleOAuthClient {
     .encode()
     .build()
     .toUriString();
+ }
+
+ public String loginUrl(String state, String codeChallenge) {
+  return UriComponentsBuilder.fromUriString(properties.authorizationUri())
+    .queryParam("client_id", properties.clientId())
+    .queryParam("redirect_uri", properties.loginRedirectUri())
+    .queryParam("response_type", "code")
+    .queryParam("scope", LOGIN_SCOPE)
+    .queryParam("prompt", "select_account")
+    .queryParam("state", state)
+    .queryParam("code_challenge", codeChallenge)
+    .queryParam("code_challenge_method", "S256")
+    .encode()
+    .build()
+    .toUriString();
+ }
+
+ /** Échange le code de connexion contre un jeton d'accès (jamais stocké : il sert à lire l'identité, puis est révoqué). */
+ public String exchangeLoginCode(String authorizationCode, String codeVerifier) {
+  MultiValueMap<String, String> form = clientCredentials();
+  form.add("grant_type", "authorization_code");
+  form.add("code", authorizationCode);
+  form.add("code_verifier", codeVerifier);
+  form.add("redirect_uri", properties.loginRedirectUri());
+  return text(postForm(form), "access_token");
+ }
+
+ public GoogleIdentity userInfo(String accessToken) {
+  Map<String, Object> response = http.get()
+    .uri(properties.userInfoUri())
+    .headers(headers -> headers.setBearerAuth(accessToken))
+    .accept(MediaType.APPLICATION_JSON)
+    .retrieve()
+    .body(JSON_OBJECT);
+  Map<String, Object> claims = response == null ? Map.of() : response;
+  return new GoogleIdentity(text(claims, "email"), Boolean.parseBoolean(String.valueOf(claims.get("email_verified"))),
+    text(claims, "name"));
  }
 
  public GrantedTokens exchangeCode(String authorizationCode, String codeVerifier) {

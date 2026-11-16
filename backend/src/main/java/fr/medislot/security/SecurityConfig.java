@@ -13,7 +13,7 @@ public class SecurityConfig {
  @Bean UserDetailsService users(UserRepository users){return email -> users.findByEmail(email.toLowerCase(java.util.Locale.ROOT)).map(u->User.withUsername(u.email).password(u.password).roles(u.role).build()).orElseThrow(()->new UsernameNotFoundException("Identité inconnue"));}
  @Bean SecurityFilterChain filter(HttpSecurity http) throws Exception {
   http.authorizeHttpRequests(a->a.dispatcherTypeMatchers(DispatcherType.ASYNC,DispatcherType.ERROR).permitAll()
-    .requestMatchers("/api/csrf","/api/register","/api/login","/api/professionals/**","/api/events","/api/ab/metrics","/api/google/callback","/actuator/health").permitAll()
+    .requestMatchers("/api/csrf","/api/register","/api/login","/api/professionals/**","/api/events","/api/ab/metrics","/api/google/callback","/api/auth/google/**","/actuator/health").permitAll()
     .requestMatchers("/api/**").authenticated().anyRequest().permitAll())
    .requestCache(c->c.disable())
    .formLogin(f->f.loginProcessingUrl("/api/login")
