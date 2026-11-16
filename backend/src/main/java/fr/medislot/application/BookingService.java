@@ -52,15 +52,15 @@ public class BookingService {
    }
   }
   check(s);oneUpcomingPerProfessional(patient,s,-1L);
-  Appointment a=new Appointment();a.patientId=patient;a.slotId=s.id;a.clinicId=s.clinicId;a.status="CONFIRMED";a.createdAt=Instant.now();appointments.saveAndFlush(a);
+  Appointment a=new Appointment();a.patientId=patient;a.slotId=s.id;a.status="CONFIRMED";a.createdAt=Instant.now();appointments.saveAndFlush(a);
   Span.current().setAttribute("medislot.appointment.id",a.id);
   if(key!=null)keys.save(patient,key,s.id,a.id);
-  record(a,"CREATED","Votre rendez-vous est confirmé.");events.publishEvent(new AppointmentBooked(patient,a.id,abToken));events.publishEvent(new BookingChanged(patient,List.of(s.professionalId)));events.publishEvent(new AppointmentChanged(a.id));return a;
+  record(a,"CREATED","Votre rendez-vous est confirmé.");events.publishEvent(new AppointmentBooked(patient,a.id,abToken));events.publishEvent(new BookingChanged(s.clinicId,patient,List.of(s.professionalId)));events.publishEvent(new AppointmentChanged(a.clinicId,a.id));return a;
  }
  @Transactional public Appointment cancel(String email,Long id){
   Appointment a=owned(id,patient(email));Slot s=lock(a.slotId);
   if(a.status.equals("CANCELLED"))return a;
-  a.status="CANCELLED";appointments.saveAndFlush(a);record(a,"CANCELLED","Votre rendez-vous a été annulé.");events.publishEvent(new BookingChanged(a.patientId,List.of(s.professionalId)));events.publishEvent(new AppointmentChanged(a.id));return a;
+  a.status="CANCELLED";appointments.saveAndFlush(a);record(a,"CANCELLED","Votre rendez-vous a été annulé.");events.publishEvent(new BookingChanged(s.clinicId,a.patientId,List.of(s.professionalId)));events.publishEvent(new AppointmentChanged(a.clinicId,a.id));return a;
  }
  @Transactional public Appointment reschedule(String email,Long id,Long slotId){
   Appointment a=owned(id,patient(email));if(!a.status.equals("CONFIRMED"))throw conflict();
@@ -68,7 +68,7 @@ public class BookingService {
   Long oldId=a.slotId; Slot first=lock(Math.min(oldId,slotId)),second=lock(Math.max(oldId,slotId));
   Slot target=first.id.equals(slotId)?first:second;Slot old=first.id.equals(oldId)?first:second;check(target);oneUpcomingPerProfessional(a.patientId,target,a.id);
   a.slotId=target.id;appointments.saveAndFlush(a);record(a,"RESCHEDULED","Votre rendez-vous a été déplacé.");
-  events.publishEvent(new BookingChanged(a.patientId,List.of(old.professionalId,target.professionalId)));events.publishEvent(new AppointmentChanged(a.id));return a;
+  events.publishEvent(new BookingChanged(a.clinicId,a.patientId,List.of(old.professionalId,target.professionalId)));events.publishEvent(new AppointmentChanged(a.clinicId,a.id));return a;
  }
- private void record(Appointment a,String action,String message){AuditEvent h=new AuditEvent();h.appointmentId=a.id;h.clinicId=a.clinicId;h.actorId=a.patientId;h.action=action;h.createdAt=Instant.now();audit.save(h);Notification n=new Notification();n.patientId=a.patientId;n.clinicId=a.clinicId;n.message=message;n.createdAt=h.createdAt;notifications.save(n);}
+ private void record(Appointment a,String action,String message){AuditEvent h=new AuditEvent();h.appointmentId=a.id;h.actorId=a.patientId;h.action=action;h.createdAt=Instant.now();audit.save(h);Notification n=new Notification();n.patientId=a.patientId;n.message=message;n.createdAt=h.createdAt;notifications.save(n);}
 }
