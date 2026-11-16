@@ -38,3 +38,5 @@ medislot:
     client-secret: ${GOOGLE_CLIENT_SECRET:}
     token-key: ${GOOGLE_TOKEN_KEY:}
     redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:8088/api/google/callback}
+    # Connexion « Continuer avec Google » : URI à déclarer aussi dans la console Google Cloud.
+    login-redirect-uri: ${GOOGLE_LOGIN_REDIRECT_URI:http://localhost:8088/api/auth/google/callback}
