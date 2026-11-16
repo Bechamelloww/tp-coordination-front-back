@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<!-- Convocation MediSlot. Uniquement des th:text : toutes les valeurs arrivent déjà mises en forme (ConvocationView). -->
+<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<title>Convocation MediSlot</title>
+<meta name="subject" content="Convocation à un rendez-vous médical"/>
+<meta name="author" content="MediSlot"/>
+<style>
+ @page { size: A4; margin: 22mm 20mm; }
+ body { font-family: 'DejaVu Sans'; font-size: 11pt; color: #10233f; line-height: 1.45; }
+ .brand { font-weight: 700; font-size: 13pt; color: #1d4ed8; letter-spacing: 1px; }
+ h1 { font-size: 22pt; font-weight: 700; margin: 6mm 0 2mm 0; }
+ .lead { margin: 0 0 8mm 0; }
+ .when { border: 1px solid #c7d2fe; background: #eef2ff; padding: 6mm; margin-bottom: 8mm; }
+ .when .day { font-size: 15pt; font-weight: 700; margin: 0; }
+ .when .time { font-size: 26pt; font-weight: 700; margin: 1mm 0 0 0; }
+ .when .zone { font-size: 9pt; margin: 1mm 0 0 0; }
+ table { width: 100%; border-collapse: collapse; margin-bottom: 8mm; }
+ th { text-align: left; width: 38%; font-weight: 700; padding: 2.5mm 0; border-bottom: 1px solid #dbe3ef; vertical-align: top; }
+ td { padding: 2.5mm 0; border-bottom: 1px solid #dbe3ef; }
+ h2 { font-size: 12pt; font-weight: 700; margin: 0 0 2mm 0; }
+ ul { margin: 0; padding-left: 5mm; }
+ .note { font-size: 8.5pt; color: #4b5b73; margin-top: 12mm; }
+</style>
+</head>
+<body>
+<p class="brand">MEDISLOT</p>
+<h1>Convocation</h1>
+<p class="lead">Rendez-vous confirmé pour <strong th:text="${c.patientName}">Hélène Durand</strong>.</p>
+
+<div class="when">
+ <p class="day" th:text="${c.day}">mardi 12 janvier 2027</p>
+ <p class="time" th:text="${c.time}">9 h 30</p>
+ <p class="zone">Heure de Paris</p>
+</div>
+
+<table>
+ <tr><th scope="row">Praticien</th><td th:text="${c.professionalName}">Dr Sarah Martin</td></tr>
+ <tr><th scope="row">Spécialité</th><td th:text="${c.specialty}">Médecine générale</td></tr>
+ <tr><th scope="row">Adresse</th><td th:text="${c.address + ', ' + c.city}">18 avenue de la République, Paris</td></tr>
+ <tr><th scope="row">Référence</th><td th:text="${c.reference}">RDV-000042</td></tr>
+</table>
+
+<h2>Le jour du rendez-vous</h2>
+<ul>
+ <li>Présentez-vous dix minutes avant l’heure indiquée.</li>
+ <li>Apportez votre carte Vitale et une pièce d’identité.</li>
+ <li>Un empêchement ? Annulez depuis « Mes rendez-vous » : le créneau sera proposé à un autre patient.</li>
+</ul>
+
+<p class="note">Document généré par MediSlot, application de formation. Praticiens et patients fictifs : ce document n’a aucune valeur médicale.</p>
+</body>
+</html>

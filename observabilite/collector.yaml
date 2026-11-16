@@ -1,0 +1,33 @@
+# Collecteur OpenTelemetry de MediSlot : recevoir, nettoyer, exporter vers Jaeger.
+receivers:
+  otlp:
+    protocols:
+      # 0.0.0.0 : écouter sur toutes les interfaces du conteneur (par défaut : localhost seulement).
+      http: {endpoint: 0.0.0.0:4318}
+      grpc: {endpoint: 0.0.0.0:4317}
+
+processors:
+  memory_limiter: {check_interval: 1s, limit_mib: 200}
+  # Filet de sécurité « données de santé » : ce qui aurait échappé au code et au SDK du navigateur.
+  attributes/sante:
+    actions:
+      - {key: url.query, action: delete}        # saisie d'une recherche (?q=...)
+      - {key: http.url, action: delete}          # ancien nom d'attribut, URL complète
+      - {key: enduser.id, action: delete}        # identité de l'utilisateur
+      - {key: user.email, action: delete}
+      - {key: user.name, action: delete}
+  batch: {}
+
+exporters:
+  # Nom récent du type : otlp_grpc (les anciens exemples écrivent otlp).
+  otlp_grpc/jaeger:
+    endpoint: jaeger:4317
+    tls: {insecure: true}   # réseau Docker interne
+  debug: {verbosity: basic}
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/sante, batch]
+      exporters: [otlp_grpc/jaeger, debug]

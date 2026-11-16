@@ -34,6 +34,17 @@ class BookingIntegrationTest {
   assertEquals(2,audit.findByAppointmentIdOrderByCreatedAtAsc(a.id).size());
   assertTrue(slots.available(2L,Instant.now(),Instant.now().plus(Duration.ofDays(14))).stream().anyMatch(s->s.id.equals(slot)));
  }
+ @Test void oneUpcomingAppointmentPerProfessional(){
+  // Vraie requête JPQL contre PostgreSQL : deuxième créneau chez le même praticien refusé (ALREADY_BOOKED), annulation = de nouveau libre.
+  var free=slots.available(6L,Instant.now(),Instant.now().plus(Duration.ofDays(14)));
+  var first=booking.book("autre@medislot.test",free.get(0).id);
+  var refused=assertThrows(fr.medislot.application.AlreadyBookedException.class,()->booking.book("autre@medislot.test",free.get(1).id));
+  assertEquals(409,refused.getStatusCode().value());assertEquals(6L,refused.professionalId());
+  // Déplacer chez le même praticien reste possible.
+  assertEquals(free.get(1).id,booking.reschedule("autre@medislot.test",first.id,free.get(1).id).slotId);
+  booking.cancel("autre@medislot.test",first.id);
+  assertNotNull(booking.book("autre@medislot.test",free.get(2).id).id);
+ }
  @Test void sameIdempotencyKeyReturnsSameAppointment(){
   var free=slots.available(4L,Instant.now(),Instant.now().plus(Duration.ofDays(14)));
   java.util.UUID key=java.util.UUID.randomUUID();

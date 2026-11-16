@@ -23,6 +23,7 @@ async function send(){
   <!-- RGAA 7.5 : la région d'alerte existe toujours ; seul son texte apparaît, il est donc lu à coup sûr. -->
   <div role="alert">
    <p v-if="booking.draft.status==='rejected'&&booking.draft.problem==='SLOT_TAKEN'" class="error-text">Ce créneau n’est plus disponible. Choisissez-en un autre. Vos réponses sont conservées.</p>
+   <p v-else-if="booking.draft.status==='rejected'&&booking.draft.problem==='ALREADY_BOOKED'" class="error-text">Vous avez déjà un rendez-vous à venir avec {{booking.draft.professionalName}}. Pour changer d’horaire, déplacez-le depuis « Mes rendez-vous ».</p>
    <p v-else-if="booking.draft.status==='rejected'" class="error-text">Votre demande a été refusée. Vérifiez vos réponses puis validez à nouveau.</p>
   </div>
   <template v-if="booking.draft.status==='rejected'&&booking.draft.problem==='SLOT_TAKEN'">

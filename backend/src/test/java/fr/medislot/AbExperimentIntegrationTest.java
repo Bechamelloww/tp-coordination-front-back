@@ -49,7 +49,9 @@ class AbExperimentIntegrationTest {
 
   // Deux réservations du même patient exposé : une seule conversion.
   List<Long> free=slots.available(3L,Instant.now(),Instant.now().plus(Duration.ofDays(14))).stream().map(s->s.id).toList();
-  booking.book(first.email,free.get(0),token);booking.book(first.email,free.get(1),token);
+  // Deuxième réservation chez un autre praticien : un seul rendez-vous à venir par praticien.
+  Long elsewhere=slots.available(5L,Instant.now(),Instant.now().plus(Duration.ofDays(14))).getFirst().id;
+  booking.book(first.email,free.get(0),token);booking.book(first.email,elsewhere,token);
   assertEquals(1,metrics(v).converted());
   assertEquals(1.0,metrics(v).rate());
 

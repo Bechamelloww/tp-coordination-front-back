@@ -327,7 +327,7 @@
             }
           },
           "409": {
-            "description": "Créneau pris ou passé (code SLOT_TAKEN), ou conflit de données",
+            "description": "Créneau pris ou passé (code SLOT_TAKEN), déjà un rendez-vous à venir avec ce praticien (code ALREADY_BOOKED : un seul à la fois par praticien), ou conflit de données",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -489,7 +489,7 @@
             }
           },
           "409": {
-            "description": "Conflit",
+            "description": "Rendez-vous annulé, créneau pris (SLOT_TAKEN), ou déjà un rendez-vous à venir chez le praticien cible (ALREADY_BOOKED)",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -533,6 +533,120 @@
           "required": true,
           "schema": {
             "type": "integer",
+            "minimum": 1
+          }
+        }
+      ]
+    },
+    "/appointments/{id}/convocation.pdf": {
+      "get": {
+        "summary": "Télécharger sa convocation (PDF)",
+        "description": "Convocation d'un rendez-vous confirmé du patient connecté. Fabriquée à la demande, jamais stockée. Le rendez-vous d'un autre patient répond 404 (et non 403) : l'existence du numéro n'est pas révélée, et aucun PDF n'est fabriqué.",
+        "parameters": [
+          {
+            "name": "download",
+            "in": "query",
+            "required": false,
+            "description": "true : Content-Disposition attachment (enregistrer) ; absent ou false : inline (afficher).",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "La convocation",
+            "headers": {
+              "Content-Disposition": {
+                "description": "inline; filename=\"convocation-{id}.pdf\" ou attachment; filename=\"convocation-{id}.pdf\" (le numéro seul : ni nom, ni spécialité, ni date).",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store : document personnel, aucune copie en cache.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "no-store"
+                  ]
+                }
+              },
+              "X-Content-Type-Options": {
+                "description": "nosniff : le navigateur s'en tient à application/pdf.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session requise",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Rendez-vous introuvable ou appartenant à un autre patient",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Rendez-vous annulé : plus de convocation",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Rendu du PDF impossible",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64",
             "minimum": 1
           }
         }
@@ -1109,6 +1223,24 @@
           "fee": {
             "type": "integer",
             "minimum": 0
+          },
+          "latitude": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": -90,
+            "maximum": 90,
+            "description": "Latitude du cabinet (WGS 84, comme OpenStreetMap). null si inconnue."
+          },
+          "longitude": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": -180,
+            "maximum": 180,
+            "description": "Longitude du cabinet (WGS 84). null si inconnue."
           }
         }
       },

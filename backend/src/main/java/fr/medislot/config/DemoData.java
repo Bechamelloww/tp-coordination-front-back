@@ -17,10 +17,33 @@ public class DemoData implements CommandLineRunner {
   users=u;professionals=p;slots=s;encoder=e;this.demoPassword=demoPassword;}
  @Override @Transactional public void run(String...args){
   if(!users.existsByEmail("patient@medislot.test")){for(String email:new String[]{"patient@medislot.test","autre@medislot.test"}){AppUser u=new AppUser();u.email=email;u.name=email.startsWith("patient")?"Camille Dupont":"Alex Martin";u.role="PATIENT";u.password=encoder.encode(demoPassword);users.save(u);}}
-  if(professionals.count()>0)return;
-  String[][] rows={{"Dr Sarah Martin","general","Paris","18 avenue de la République"},{"Dr Thomas Leroy","cardiology","Paris","42 rue de Rennes"},{"Dr Amel Benali","dermatology","Lyon","6 rue de la Charité"},{"Dr Hugo Petit","general","Lyon","21 cours Lafayette"},{"Dr Léa Moreau","dentistry","Paris","12 boulevard Saint-Germain"},{"Dr Inès Diallo","general","Bordeaux","8 cours de Verdun"}};
-  for(String[] row:rows){Professional p=new Professional();p.name=row[0];p.specialty=row[1];p.city=row[2];p.address=row[3];p.bio="Un accompagnement attentif, dans un cabinet accessible. Les informations de ce profil sont fictives et servent à la formation MediSlot.";p.fee=row[1].equals("general")?30:60;professionals.save(p);
-   for(int day=1;day<=10;day++)for(int hour:new int[]{9,10,11,14,15,16}){Slot s=new Slot();s.professionalId=p.id;s.startsAt=LocalDate.now(ZoneId.of("Europe/Paris")).plusDays(day).atTime(hour,0).atZone(ZoneId.of("Europe/Paris")).toInstant();s.endsAt=s.startsAt.plusSeconds(1800);slots.save(s);}
+  seedProfessionals();
+  for(Professional p:professionals.findAll())topUpSlots(p);
+ }
+ /** Jours de créneaux tenus à disposition : la fenêtre affichée par GET /api/professionals/{id}/slots (14 jours). */
+ static final int DAYS_AHEAD=14;
+ static final int[] HOURS={9,10,11,14,15,16};
+ /**
+  * Complète, à chaque démarrage, les créneaux des DAYS_AHEAD prochains jours qui manquent.
+  * Une base de démo ancienne retrouve ainsi des disponibilités ; les créneaux existants et leurs rendez-vous ne bougent pas.
+  */
+ private void topUpSlots(Professional p){
+  ZoneId paris=ZoneId.of("Europe/Paris");LocalDate today=LocalDate.now(paris);
+  var existing=new java.util.HashSet<>(slots.startsFrom(p.id,today.plusDays(1).atStartOfDay(paris).toInstant()));
+  for(int day=1;day<=DAYS_AHEAD;day++)for(int hour:HOURS){
+   Instant start=today.plusDays(day).atTime(hour,0).atZone(paris).toInstant();
+   if(existing.contains(start))continue;
+   Slot s=new Slot();s.professionalId=p.id;s.startsAt=start;s.endsAt=start.plusSeconds(1800);slots.save(s);
   }
+ }
+ private void seedProfessionals(){
+  // Positions : mêmes valeurs que la migration V5 (géocodage OpenStreetMap, données fictives).
+  // Les cinq derniers (TP géolocalisation) : places publiques de l'agglomération lyonnaise. Depuis la place Bellecour
+  // (45.7576, 4.8317), six praticiens sont à moins de 5 km ; Vénissieux (≈ 7,9 km) reste hors du rayon.
+  // Leurs noms se classent après les six premiers : la première page de l'annuaire ne change pas.
+  // Ajoutés aussi aux bases de démo existantes : chaque ligne absente (même nom, même adresse) est créée.
+  String[][] rows={{"Dr Sarah Martin","general","Paris","18 avenue de la République","48.866400","2.370000"},{"Dr Thomas Leroy","cardiology","Paris","42 rue de Rennes","48.851300","2.330500"},{"Dr Amel Benali","dermatology","Lyon","6 rue de la Charité","45.756800","4.831900"},{"Dr Hugo Petit","general","Lyon","21 cours Lafayette","45.763688","4.844596"},{"Dr Léa Moreau","dentistry","Paris","12 boulevard Saint-Germain","48.849564","2.354708"},{"Dr Inès Diallo","general","Bordeaux","8 cours de Verdun","44.845525","-0.577436"},
+   {"Dr Valérie Fontaine","cardiology","Lyon","Place de la Croix-Rousse","45.774300","4.831800"},{"Dr Victor Roux","general","Lyon","Place Saint-Jean","45.760900","4.827400"},{"Dr Yasmine Haddad","dentistry","Lyon","Place Jean Jaurès","45.746600","4.841000"},{"Dr Yann Lambert","cardiology","Villeurbanne","Place Lazare-Goujon","45.766700","4.880000"},{"Dr Zoé Garnier","dermatology","Vénissieux","Place Léon-Sublet","45.697500","4.886800"}};
+  for(String[] row:rows){if(professionals.existsByNameAndAddress(row[0],row[3]))continue;Professional p=new Professional();p.name=row[0];p.specialty=row[1];p.city=row[2];p.address=row[3];p.latitude=Double.valueOf(row[4]);p.longitude=Double.valueOf(row[5]);p.bio="Un accompagnement attentif, dans un cabinet accessible. Les informations de ce profil sont fictives et servent à la formation MediSlot.";p.fee=row[1].equals("general")?30:60;professionals.save(p);}
  }
 }

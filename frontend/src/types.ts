@@ -1,4 +1,5 @@
-export interface Professional {id:number;name:string;specialty:string;city:string;address:string;bio:string;fee:number}
+/** latitude, longitude : position du cabinet (WGS 84), null si inconnue. */
+export interface Professional {id:number;name:string;specialty:string;city:string;address:string;bio:string;fee:number;latitude?:number|null;longitude?:number|null}
 export interface Slot {id:number;professionalId:number;startsAt:string;endsAt:string}
 export interface Appointment {id:number;slotId:number;professionalId:number;professionalName:string;specialty:string;address:string;city:string;startsAt:string;status:'CONFIRMED'|'CANCELLED'}
 export interface Identity {id:number;name:string;email:string;role:string}

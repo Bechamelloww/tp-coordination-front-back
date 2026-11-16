@@ -1,5 +1,5 @@
 import type {BookingDraft,BookingRequestBody,FieldError,ReasonCode} from './types';
-import type {Slot} from '../types';
+import type {Slot,Appointment} from '../types';
 // Motifs : des codes de liste, jamais de texte libre sur la santé (minimisation).
 export const reasons:Record<ReasonCode,string>={
  FIRST_VISIT:'Première consultation',FOLLOW_UP:'Consultation de suivi',
@@ -27,6 +27,19 @@ export function toRequest(d:BookingDraft):BookingRequestBody{
 // Spring rapporte la règle croisée sous « relativeNamed » : on la remet sous le bon champ.
 export function fromServer(errors?:FieldError[]):FieldError[]{
  return (errors??[]).map(e=>({field:e.field==='relativeNamed'?'relativeName':e.field,message:e.message}));
+}
+/**
+ * Règle « un seul rendez-vous à venir par praticien » (le serveur la contrôle : 409 ALREADY_BOOKED).
+ * Pour chaque praticien, le rendez-vous confirmé à venir le plus proche. excludeId : celui qu'on déplace, qui ne bloque pas.
+ */
+export function upcomingByPro(appointments:Appointment[],now:number,excludeId:number|null=null):Record<number,Appointment>{
+ const byPro:Record<number,Appointment>={};
+ for(const a of appointments){
+  if(a.status!=='CONFIRMED'||a.id===excludeId||Date.parse(a.startsAt)<=now)continue;
+  const current=byPro[a.professionalId];
+  if(!current||Date.parse(a.startsAt)<Date.parse(current.startsAt))byPro[a.professionalId]=a;
+ }
+ return byPro;
 }
 /** Les n créneaux libres les plus proches de l'horaire perdu, hors ce créneau. */
 export function nearest(slots:Slot[],slotId:number,startsAt:string,n=3):Slot[]{

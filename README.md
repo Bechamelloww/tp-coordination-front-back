@@ -16,12 +16,31 @@ Ouvrir http://localhost:8088. Le premier démarrage télécharge les images et d
 Compte : `patient@medislot.test`, mot de passe = valeur de `DEMO_PASSWORD` dans `.env`.
 Second patient : `autre@medislot.test`, même mot de passe. On peut aussi créer un compte depuis l’interface.
 
-Le navigateur passe par Nginx. `/api` rejoint Spring. PostgreSQL utilise un volume persistant. Les disponibilités fictives couvrent les dix jours suivant la première initialisation. Pour des sessions de formation ultérieures, renouveler les créneaux en base ou utiliser un nouveau nom de projet Compose avec `docker compose -p medislot-nouvelle-session up -d --build` après avoir arrêté l’ancien projet. Ne pas effacer un volume contenant un travail à conserver.
+Le navigateur passe par Nginx. `/api` rejoint Spring. PostgreSQL utilise un volume persistant. Les disponibilités fictives couvrent les quatorze jours suivants (la fenêtre affichée par l’API) : à chaque démarrage du back, `DemoData` complète les créneaux manquants sans toucher aux créneaux existants ni aux rendez-vous. Pour une session à repartir de zéro, utiliser un nouveau nom de projet Compose avec `docker compose -p medislot-nouvelle-session up -d --build` après avoir arrêté l’ancien projet. Ne pas effacer un volume contenant un travail à conserver.
+
+## Observabilité : traces OpenTelemetry
+
+Chaque requête est suivie du navigateur jusqu'à la base, sous un identifiant de trace commun.
+
+- **Navigateur** (`frontend/src/tracing.ts`) : SDK web, un span par `fetch`, en-tête `traceparent` W3C, envoi par lots sur `/otlp/` (même origine, relayé par Nginx au collecteur). La partie `?…` de `url.full` est retirée dans le navigateur.
+- **Back** : agent Java 2.33.1 chargé par `JAVA_TOOL_OPTIONS` (Tomcat, Spring Data, Hibernate, JDBC tracés sans code). Span métier `medislot.reservation` (identifiants techniques seulement). L'en-tête `X-Trace-Id` renvoie l'identifiant de trace ; le front l'affiche dans les erreurs 5xx (« réf. … »).
+- **Collecteur** (`observabilite/collector.yaml`) : reçoit en OTLP, supprime les attributs sensibles (`attributes/sante`), exporte vers Jaeger.
+- **Jaeger** : http://localhost:16686 (publié sur 127.0.0.1 seulement, sans authentification).
+
+```sh
+export GIT_SHA=$(git rev-parse --short HEAD)   # service.version des spans
+docker compose up -d --build
+bash tests/verifier_traces.sh                   # Git Bash sous Windows
+cd frontend && npx playwright test e2e/trace.spec.ts
+```
+
+Aucune donnée de santé dans un attribut : ni nom, ni e-mail, ni motif, ni saisie. Voir `TRACES.md`.
 
 ## Parcours disponibles
 
 - Recherche par praticien, spécialité et ville, avec pagination.
 - Fiches de praticiens et créneaux dans le fuseau Europe/Paris.
+- « Autour de moi (5 km) » : les praticiens à moins de 5 km, du plus proche au plus loin, sur une carte OpenStreetMap (Leaflet) avec le cercle du rayon et un marqueur par praticien ; la liste reste lisible sans la carte. La position n’est demandée que sur ce clic, reste en mémoire dans le navigateur (distance à vol d’oiseau calculée sur place), n’est jamais envoyée à MediSlot, ni stockée, ni tracée. Données de démo : 11 praticiens, dont 7 autour de Lyon (6 à moins de 5 km de la place Bellecour, 45.7576, 4.8317).
 - Inscription, connexion et déconnexion par session avec protection CSRF.
 - Réservation, déplacement atomique et annulation.
 - Contrôle du propriétaire de chaque rendez-vous.

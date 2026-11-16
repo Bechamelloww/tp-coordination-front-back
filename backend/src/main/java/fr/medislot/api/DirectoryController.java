@@ -10,7 +10,8 @@ import org.springframework.http.HttpStatus;
 public class DirectoryController {
  private final ProfessionalRepository professionals; private final SlotRepository slots;
  public DirectoryController(ProfessionalRepository professionals,SlotRepository slots){this.professionals=professionals;this.slots=slots;}
- public record ProfessionalDto(Long id,String name,String specialty,String city,String address,String bio,int fee) {static ProfessionalDto from(Professional p){return new ProfessionalDto(p.id,p.name,p.specialty,p.city,p.address,p.bio,p.fee);}}
+ /** latitude, longitude : position du cabinet (WGS 84), null si inconnue. */
+ public record ProfessionalDto(Long id,String name,String specialty,String city,String address,String bio,int fee,Double latitude,Double longitude) {static ProfessionalDto from(Professional p){return new ProfessionalDto(p.id,p.name,p.specialty,p.city,p.address,p.bio,p.fee,p.latitude,p.longitude);}}
  public record PageDto<T>(java.util.List<T> items,int page,int size,long total){}
  public record SlotDto(Long id,Long professionalId,Instant startsAt,Instant endsAt){}
  @GetMapping public PageDto<ProfessionalDto> search(@RequestParam(defaultValue="") String specialty,@RequestParam(defaultValue="") String city,@RequestParam(defaultValue="") String q,@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="6") int size){
