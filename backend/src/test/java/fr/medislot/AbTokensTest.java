@@ -34,5 +34,11 @@ class AbTokensTest {
   assertTrue(tokens.verify("pas-un-jeton").isEmpty());
   assertTrue(tokens.verify("a.b.c!").isEmpty());
  }
+ @Test void drawsARandomSecretWhenNoneIsConfigured(){
+  AbTokens first=new AbTokens("",Duration.ofHours(1)),second=new AbTokens("",Duration.ofHours(1));
+  String token=first.issue(7L,"confirm_label_v1","B");
+  assertTrue(first.verify(token).isPresent());
+  assertTrue(second.verify(token).isEmpty());
+ }
  @Test void refusesShortSecret(){assertThrows(IllegalStateException.class,()->new AbTokens("trop-court",Duration.ofHours(1)));}
 }
