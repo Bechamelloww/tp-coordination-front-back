@@ -13,11 +13,14 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Locale;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -31,8 +34,7 @@ import org.springframework.web.server.ResponseStatusException;
 /**
  * Connexion « Continuer avec Google » (OpenID Connect, code d'autorisation + PKCE S256 + state à usage unique).
  * <p>
- * Le compte MediSlot est retrouvé par l'adresse e-mail, à condition que Google l'ait vérifiée ; sinon un compte patient
- * est créé, avec un mot de passe aléatoire inutilisable. Aucun jeton Google n'est conservé : le jeton d'accès sert à lire
+ * Aucun jeton Google n'est conservé : le jeton d'accès sert à lire
  * l'identité, puis il est révoqué. La session change d'identifiant à la connexion (fixation de session).
  */
 @Service
@@ -45,7 +47,7 @@ public class GoogleLoginService {
  private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
 
  public enum Outcome {
-  CONNECTE("google"), REFUSE("refuse"), ERREUR("erreur");
+  CONNECTE("google"), REFUSE("refuse"), COMPTE_EXISTANT("compte-existant"), ERREUR("erreur");
 
   private final String queryValue;
 
@@ -118,28 +120,58 @@ public class GoogleLoginService {
   } finally {
    revokeQuietly(accessToken);
   }
+  if (identity.sub() == null || identity.sub().isBlank()) {
+   return Outcome.ERREUR;
+  }
   if (identity.email() == null || identity.email().isBlank() || !identity.emailVerified()) {
    return Outcome.REFUSE;
   }
-  AppUser user = findOrCreate(identity);
-  signIn(user.email, request, response);
+  Optional<AppUser> user = resolve(identity);
+  if (user.isEmpty()) {
+   return Outcome.COMPTE_EXISTANT;
+  }
+  signIn(user.get().email, request, response);
   return Outcome.CONNECTE;
  }
 
- private AppUser findOrCreate(GoogleOAuthClient.GoogleIdentity identity) {
+ private Optional<AppUser> resolve(GoogleOAuthClient.GoogleIdentity identity) {
+  Optional<AppUser> linked = users.findByGoogleSub(identity.sub());
+  if (linked.isPresent()) {
+   return linked;
+  }
   String email = identity.email().strip().toLowerCase(Locale.ROOT);
-  return users.findByEmail(email).orElseGet(() -> {
-   AppUser created = new AppUser();
-   created.email = email;
-   created.name = displayName(identity.name(), email);
-   created.role = "PATIENT";
-   created.password = encoder.encode(randomUrlSafe());
-   try {
-    return users.saveAndFlush(created);
-   } catch (DataIntegrityViolationException createdConcurrently) {
-    return users.findByEmail(email).orElseThrow();
-   }
-  });
+  Optional<AppUser> sameEmail = users.findByEmail(email);
+  if (sameEmail.isEmpty()) {
+   return Optional.of(create(identity, email));
+  }
+  AppUser existing = sameEmail.get();
+  if (existing.googleSub == null && email.equals(currentUserEmail())) {
+   existing.googleSub = identity.sub();
+   return Optional.of(users.saveAndFlush(existing));
+  }
+  return Optional.empty();
+ }
+
+ private AppUser create(GoogleOAuthClient.GoogleIdentity identity, String email) {
+  AppUser created = new AppUser();
+  created.email = email;
+  created.name = displayName(identity.name(), email);
+  created.role = "PATIENT";
+  created.password = encoder.encode(randomUrlSafe());
+  created.googleSub = identity.sub();
+  try {
+   return users.saveAndFlush(created);
+  } catch (DataIntegrityViolationException createdConcurrently) {
+   return users.findByGoogleSub(identity.sub()).orElseThrow(() -> createdConcurrently);
+  }
+ }
+
+ private static String currentUserEmail() {
+  Authentication current = SecurityContextHolder.getContext().getAuthentication();
+  if (current == null || !current.isAuthenticated() || current instanceof AnonymousAuthenticationToken) {
+   return null;
+  }
+  return current.getName();
  }
 
  private void signIn(String email, HttpServletRequest request, HttpServletResponse response) {

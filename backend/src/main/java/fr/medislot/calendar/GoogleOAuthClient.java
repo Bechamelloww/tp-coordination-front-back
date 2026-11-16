@@ -26,8 +26,7 @@ public class GoogleOAuthClient {
   }
  }
 
- /** Identité renvoyée par Google : e-mail, e-mail vérifié par Google, nom affiché. */
- public record GoogleIdentity(String email, boolean emailVerified, String name) {
+ public record GoogleIdentity(String sub, String email, boolean emailVerified, String name) {
  }
 
  private final GoogleProperties properties;
@@ -92,7 +91,7 @@ public class GoogleOAuthClient {
     .retrieve()
     .body(JSON_OBJECT);
   Map<String, Object> claims = response == null ? Map.of() : response;
-  return new GoogleIdentity(text(claims, "email"), Boolean.parseBoolean(String.valueOf(claims.get("email_verified"))),
+  return new GoogleIdentity(text(claims, "sub"), text(claims, "email"), Boolean.parseBoolean(String.valueOf(claims.get("email_verified"))),
     text(claims, "name"));
  }
 
