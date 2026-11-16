@@ -1,5 +1,6 @@
 // Convocation PDF d'un rendez-vous : récupération, affichage dans un onglet, enregistrement.
 // Contrat : GET /api/appointments/{id}/convocation.pdf[?download=true] (voir CONVOCATION.md §1).
+import {currentClinic} from './tenant';
 
 /** Une phrase par code : le patient ne voit jamais de JSON. */
 export const MESSAGES:Record<number,string>={
@@ -37,7 +38,8 @@ export interface Convocation {blob:Blob;filename:string}
 export async function fetchConvocation(id:number,{download=false}:{download?:boolean}={}):Promise<Convocation>{
  let r:Response;
  try{
-  r=await fetch(convocationUrl(id,download),{credentials:'same-origin',headers:{Accept:'application/pdf, application/problem+json'}});
+  const headers:Record<string,string>={Accept:'application/pdf, application/problem+json'},clinic=currentClinic();if(clinic)headers['X-Clinic']=clinic;
+  r=await fetch(convocationUrl(id,download),{credentials:'same-origin',headers});
  }catch{throw new ConvocationError(OFFLINE,0);}
  if(!r.ok){
   let message=MESSAGES[r.status]??(r.status>=500?MESSAGES[500]:FALLBACK);
