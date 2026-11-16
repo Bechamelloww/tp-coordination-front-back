@@ -17,6 +17,7 @@ const conteneur=ref<HTMLElement|null>(null);
 let carte:L.Map|null=null,calque:L.LayerGroup|null=null,observateur:ResizeObserver|null=null;
 
 const ll=(p:Point):L.LatLngTuple=>[p.latitude,p.longitude];
+function texte(contenu:string):HTMLElement{const span=document.createElement('span');span.textContent=contenu;return span;}
 /** Le cercle entier dans le cadre : la zone cherchée se voit, même sans aucun praticien dedans. */
 function cadrer(){
  if(!carte)return;
@@ -30,7 +31,7 @@ function dessiner(){
  L.circle(ll(props.centre),{radius:props.rayonKm*1000,color:'#0873b9',weight:2,fillColor:'#0873b9',fillOpacity:.06,interactive:false}).addTo(calque);
  for(const {professional:p,distanceKm} of props.proches){
   L.circleMarker([p.latitude!,p.longitude!],{radius:9,color:'#ffffff',weight:3,fillColor:'#0873b9',fillOpacity:1})
-   .bindTooltip(`${p.name} · ${formatDistance(distanceKm)}`,{direction:'top',offset:[0,-8]})
+   .bindTooltip(texte(`${p.name} · ${formatDistance(distanceKm)}`),{direction:'top',offset:[0,-8]})
    .on('click',()=>emit('profile',p))
    .addTo(calque);
  }

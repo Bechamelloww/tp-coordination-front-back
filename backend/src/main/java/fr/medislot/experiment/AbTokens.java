@@ -28,10 +28,11 @@ public class AbTokens {
  private static final Pattern SUB=Pattern.compile("\"sub\":\"(\\d+)\""),EXPERIMENT=Pattern.compile("\"experiment\":\"([a-z0-9_]+)\""),VARIANT=Pattern.compile("\"variant\":\"([AB])\""),EXP=Pattern.compile("\"exp\":(-?\\d+)");
  private final byte[] secret; private final Duration ttl;
 
- public AbTokens(@Value("${medislot.ab.token-secret}") String secret,@Value("${medislot.ab.token-ttl:PT24H}") Duration ttl){
-  this.secret=secret.getBytes(StandardCharsets.UTF_8);this.ttl=ttl;
+ public AbTokens(@Value("${medislot.ab.token-secret:}") String secret,@Value("${medislot.ab.token-ttl:PT24H}") Duration ttl){
+  this.secret=secret==null||secret.isBlank()?randomSecret():secret.getBytes(StandardCharsets.UTF_8);this.ttl=ttl;
   if(this.secret.length<32)throw new IllegalStateException("medislot.ab.token-secret doit contenir au moins 32 octets.");
  }
+ private static byte[] randomSecret(){byte[] b=new byte[32];new java.security.SecureRandom().nextBytes(b);return b;}
 
  public String issue(Long userId,String experiment,String variant){
   long now=Instant.now().getEpochSecond();

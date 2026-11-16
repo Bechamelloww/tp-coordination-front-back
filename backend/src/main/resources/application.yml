@@ -30,8 +30,7 @@ medislot:
   ab:
     enabled: ${AB_ENABLED:true}
     max-participants: ${AB_MAX_PARTICIPANTS:10}
-    # Secret HMAC des jetons de variante (32 octets minimum). Valeur locale uniquement.
-    token-secret: ${AB_TOKEN_SECRET:medislot-ab-local-only-secret-change-me}
+    token-secret: ${AB_TOKEN_SECRET:}
     token-ttl: ${AB_TOKEN_TTL:PT24H}
   google:
     client-id: ${GOOGLE_CLIENT_ID:}
