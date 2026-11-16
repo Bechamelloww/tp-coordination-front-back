@@ -34,6 +34,7 @@ import org.springframework.security.web.context.HttpSessionSecurityContextReposi
 
 class GoogleLoginServiceTest {
  private static final String EMAIL = "camille@gmail.com";
+ private static final String SUB = "108123456789012345678";
 
  private final GoogleOAuthClient oauthClient = mock(GoogleOAuthClient.class);
  private final UserRepository users = mock(UserRepository.class);
@@ -69,7 +70,7 @@ class GoogleLoginServiceTest {
  private void googleReturns(String email, boolean verified, String name) {
   String verifier = (String) session.getAttribute(GoogleLoginService.SESSION_CODE_VERIFIER);
   when(oauthClient.exchangeLoginCode("code", verifier)).thenReturn("jeton-acces");
-  when(oauthClient.userInfo("jeton-acces")).thenReturn(new GoogleOAuthClient.GoogleIdentity(email, verified, name));
+  when(oauthClient.userInfo("jeton-acces")).thenReturn(new GoogleOAuthClient.GoogleIdentity(SUB, email, verified, name));
  }
 
  @Test
