@@ -1185,6 +1185,187 @@
           }
         }
       }
+    },
+    "/google/status": {
+      "get": {
+        "summary": "Lire l’état de la liaison Google Agenda",
+        "description": "enabled vaut false quand le serveur n’a pas de client Google configuré : le front masque alors la fonction.",
+        "responses": {
+          "200": {
+            "description": "État de la liaison",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleCalendarStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session requise",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/google/authorize": {
+      "post": {
+        "summary": "Démarrer la liaison Google Agenda",
+        "description": "Renvoie l’adresse de consentement Google (code d’autorisation, PKCE S256, state lié à la session, portée calendar.app.created). Le front y redirige le navigateur. Protégé par le jeton CSRF.",
+        "responses": {
+          "200": {
+            "description": "Adresse de consentement Google",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "no-store"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleAuthorization"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session requise",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton CSRF absent ou expiré",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Synchronisation Google Agenda non activée sur ce serveur",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
+    "/google/callback": {
+      "get": {
+        "summary": "Recevoir la réponse de Google",
+        "description": "Adresse de retour enregistrée chez Google. Vérifie le state, échange le code, crée l’agenda MediSlot et chiffre le jeton de rafraîchissement. Redirige toujours vers l’application, sans détail technique.",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Retour vers /?google=connecte, /?google=refuse ou /?google=erreur",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "/?google=connecte",
+                    "/?google=refuse",
+                    "/?google=erreur"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/google/link": {
+      "delete": {
+        "summary": "Déconnecter Google Agenda",
+        "description": "Supprime l’agenda MediSlot chez Google, révoque le jeton puis efface la liaison. Sans liaison, ne fait rien.",
+        "responses": {
+          "204": {
+            "description": "Liaison supprimée"
+          },
+          "401": {
+            "description": "Session requise",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton CSRF absent ou expiré",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1562,6 +1743,40 @@
             "description": "Pour proposer d’autres créneaux du même praticien"
           }
         }
+      },
+      "GoogleCalendarStatus": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "status"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NON_CONNECTE",
+              "CONNECTE",
+              "A_RECONNECTER"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "GoogleAuthorization": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "additionalProperties": false
       }
     },
     "securitySchemes": {

@@ -8,3 +8,4 @@ export interface Notice {id:number;message:string;createdAt:string}
 export const specialties:Record<string,string>={general:'Médecine générale',cardiology:'Cardiologie',dermatology:'Dermatologie',dentistry:'Chirurgie dentaire'};
 export const dateLabel=(date:string)=>new Intl.DateTimeFormat('fr-FR',{weekday:'long',day:'numeric',month:'long',timeZone:'Europe/Paris'}).format(new Date(date));
 export const timeLabel=(date:string)=>new Intl.DateTimeFormat('fr-FR',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Paris'}).format(new Date(date));
+export interface GoogleStatus {enabled:boolean;status:'NON_CONNECTE'|'CONNECTE'|'A_RECONNECTER'}

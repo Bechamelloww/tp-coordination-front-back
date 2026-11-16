@@ -23,6 +23,10 @@ services:
       AB_ENABLED: "true"
       AB_MAX_PARTICIPANTS: "10"
       AB_TOKEN_SECRET: ${AB_TOKEN_SECRET:-medislot-ab-local-only-secret-change-me}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_TOKEN_KEY: ${GOOGLE_TOKEN_KEY:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8088/api/google/callback}
       # OpenTelemetry : l'agent est chargé par la JVM, sans toucher à la commande de lancement.
       JAVA_TOOL_OPTIONS: -javaagent:/app/opentelemetry-javaagent.jar
       OTEL_SERVICE_NAME: medislot-api

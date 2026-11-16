@@ -33,3 +33,8 @@ medislot:
     # Secret HMAC des jetons de variante (32 octets minimum). Valeur locale uniquement.
     token-secret: ${AB_TOKEN_SECRET:medislot-ab-local-only-secret-change-me}
     token-ttl: ${AB_TOKEN_TTL:PT24H}
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
+    client-secret: ${GOOGLE_CLIENT_SECRET:}
+    token-key: ${GOOGLE_TOKEN_KEY:}
+    redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:8088/api/google/callback}

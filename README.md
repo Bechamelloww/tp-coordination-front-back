@@ -84,6 +84,8 @@ Le projet privilégie des fichiers courts et des responsabilités identifiables.
 
 L’index unique partiel PostgreSQL et les verrous protègent la réservation. La création répétée renvoie un conflit, sans cache durable de clés d’idempotence. Le listener SSE est local au processus. La reconnexion relit l’état, sans rejeu historique. Une outbox et un bus partagé sont des approfondissements documentés.
 
+La synchronisation Google Agenda (`GOOGLE_AGENDA.md`, ADR 006) est désactivée tant que `GOOGLE_CLIENT_ID` est vide. Elle demande la portée la plus étroite, chiffre le jeton de rafraîchissement et n'envoie qu'un titre neutre, sans spécialité. Une synchronisation en échec n'est pas rejouée.
+
 Les comptes fictifs, HTTP local, données d’amorçage et mots de passe de base sont réservés à la formation. Avant toute exploitation réelle : terminer le durcissement, retirer l’amorçage, configurer les secrets, HTTPS et les cookies Secure, traiter la révocation SSE immédiate, les limites de connexions, le contrôle des tentatives, les sauvegardes et le contexte réglementaire. Aucune donnée réelle de santé ne doit être ajoutée au laboratoire.
 
 ## Repères
