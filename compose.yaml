@@ -52,10 +52,8 @@ services:
   # Reçoit les spans du navigateur (via Nginx /otlp/) et du back, les nettoie, les envoie à Jaeger.
   # Aucun port publié : seul le réseau Docker interne y accède.
   collector:
-    image: otel/opentelemetry-collector-contrib:0.165.0
+    build: ./observabilite
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
-    volumes:
-      - ./observabilite/collector.yaml:/etc/otelcol-contrib/config.yaml:ro
     depends_on: [jaeger]
   # Stockage et recherche des traces (en mémoire). Pas d'authentification : publié sur 127.0.0.1 seulement.
   jaeger:
