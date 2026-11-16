@@ -62,7 +62,34 @@ indépendantes : le filtre applicatif (Hibernate `@TenantId`, étape 2) et la RL
 
 ## §2 Cabinet courant, filtre et contexte
 
-*À compléter à l'étape 2.*
+### Du navigateur à la base
+
+1. **URL** : `/c/cabinet-b/` (ou le nom d'hôte `cabinet-b.medislot.test`). `tenant.ts` en extrait le slug et le valide
+   (`[a-z0-9-]`) ; l'adresse `cabinet-a.medislot.test.pirate.example` est refusée parce qu'on teste la fin du nom d'hôte.
+2. **Requête** : `api.ts` ajoute `X-Clinic: <slug>` à chaque appel. Les flux SSE (`EventSource` ne sait pas poser d'en-tête)
+   passent le cabinet dans l'adresse : `?clinic=<slug>`.
+3. **`TenantFilter`** (dans la chaîne Spring Security, après l'authentification) :
+   - slug absent ou mal formé : **400** ;
+   - cabinet inconnu, ou utilisateur connecté qui n'en est pas membre : **404** (même réponse dans les deux cas, pour ne pas
+     révéler l'existence d'un cabinet) ;
+   - visiteur anonyme : accepté (annuaire public) ;
+   - sinon le cabinet est posé dans `TenantContext`, et **retiré dans un `finally`**, y compris si la suite de la chaîne lève une exception.
+   Il n'est pas un `@Component` : Spring Boot l'enregistrerait aussi dans la chaîne des servlets, hors de Spring Security.
+4. **Hibernate** : les cinq entités propres portent `@TenantId` sur `clinicId`. `ClinicTenantResolver` lit `TenantContext` ;
+   Hibernate ajoute `clinic_id = ?` à chaque lecture et le renseigne à chaque insertion. Sans cabinet, l'identifiant `0`
+   ne correspond à aucune ligne : la requête échoue fermée, elle ne devient pas globale.
+
+Appels sans cabinet (le filtre ne s'applique pas) : `/api/csrf`, `/api/login`, `/api/logout`, `/api/me`, `/api/me/clinics`, `/api/ab/**`,
+`/api/google/**` (retour OAuth de Google, sans en-tête). Ils ne touchent que des tables partagées.
+
+### Ce qui ne passe pas par Hibernate
+
+- `BookingKeys` (JDBC) : filtré à la main sur `clinic_id`.
+- Écouteur Google Agenda (`@Async`) : un autre thread ne reçoit pas le `ThreadLocal`. Le cabinet voyage dans l'événement
+  `AppointmentChanged` et l'écouteur le pose lui-même.
+- Flux SSE public : chaque abonné est rattaché à son cabinet, un événement n'est envoyé qu'aux abonnés du même cabinet.
+- `DemoData` : une transaction par cabinet, ouverte **après** avoir posé le cabinet (la session Hibernate garde le cabinet présent à son ouverture).
+- Inscription : le nouveau compte est rattaché au cabinet courant (`membership`).
 
 ## §3 RLS et cache
 
@@ -72,6 +99,8 @@ indépendantes : le filtre applicatif (Hibernate `@TenantId`, étape 2) et la RL
 
 | Test | Ce qu'il prouve | Résultat |
 |---|---|---|
+| `TenantFilterTest` (11 cas) | 400 sans en-tête ou slug mal formé ; 404 cabinet inconnu ou non membre ; anonyme et membre acceptés ; paramètre `clinic` pour le SSE ; contexte retiré après la requête et après une exception ; appels sans cabinet non filtrés | Vert |
+| `tenant.test.ts`, `clinic.test.ts` (front) | Slug lu dans le chemin et le nom d'hôte (dont le piège `.pirate.example`) ; couleur filtrée ; en-tête `X-Clinic` ; bascule refusée vers un cabinet dont on n'est pas membre | Vert |
 | `ClinicSchemaTest` (7 cas) | Deux cabinets existent ; membres de démo corrects ; chaque cabinet a ses praticiens et créneaux ; clés composites refusent un mélange de cabinets ; slug unique ; rôle applicatif soumis à la RLS | Vert |
 
 ## §5 Défi : fuite d'un nouvel endpoint
