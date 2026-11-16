@@ -10,7 +10,7 @@ ajv.addSchema(contract,'medislot');
 
 test('les réponses publiques respectent le contrat OpenAPI',async({request})=>{
  for(const [route,path] of [['/professionals?page=0&size=2','/professionals'],['/professionals/1','/professionals/{id}'],['/professionals/1/slots','/professionals/{id}/slots'],['/ab/metrics','/ab/metrics']]){
-  const response=await request.get('/api'+route);
+  const response=await request.get('/api'+route,{headers:{'X-Clinic':'cabinet-a'}});
   expect(response.status()).toBe(200);
   const schema=contract.paths[path].get.responses['200'].content['application/json'].schema;
   const validate=ajv.compile({...schema,components:contract.components});

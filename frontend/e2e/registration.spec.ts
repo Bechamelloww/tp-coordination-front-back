@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 
 test('inscription, limite UTF-8 du mot de passe et connexion',async({request})=>{
  const csrf=await (await request.get('/api/csrf')).json();
- const headers={[csrf.headerName]:csrf.token};
+ const headers={[csrf.headerName]:csrf.token,'X-Clinic':'cabinet-a'};
  const email=`test-${Date.now()}@medislot.test`;
  const invalid=await request.post('/api/register',{headers,data:{email,name:'Patient de test',password:'é'.repeat(40)}});
  expect(invalid.status()).toBe(400);
