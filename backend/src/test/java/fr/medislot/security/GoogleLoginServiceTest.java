@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.core.context.SecurityContext;
@@ -88,6 +89,7 @@ class GoogleLoginServiceTest {
   assertEquals(EMAIL, saved.getValue().email);
   assertEquals("Camille Dupont", saved.getValue().name);
   assertEquals("PATIENT", saved.getValue().role);
+  assertEquals(SUB, saved.getValue().googleSub);
   SecurityContext stored = (SecurityContext) request.getSession()
     .getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
   assertNotNull(stored);
@@ -96,16 +98,83 @@ class GoogleLoginServiceTest {
   verify(oauthClient).revoke("jeton-acces");
  }
 
+ private static AppUser account(String googleSub) {
+  AppUser account = new AppUser();
+  account.email = EMAIL;
+  account.googleSub = googleSub;
+  return account;
+ }
+
  @Test
- void unCompteExistantEstRetrouveParSonEmail() {
+ void unCompteReliEstRetrouveParSonSub() {
   String state = startAndReturnState();
   googleReturns(EMAIL, true, "Camille");
-  AppUser existing = new AppUser();
-  existing.email = EMAIL;
-  when(users.findByEmail(EMAIL)).thenReturn(Optional.of(existing));
+  when(users.findByGoogleSub(SUB)).thenReturn(Optional.of(account(SUB)));
 
   assertEquals(GoogleLoginService.Outcome.CONNECTE, service.complete(request, response, state, "code", null));
   verify(users, never()).saveAndFlush(any());
+  verify(users, never()).findByEmail(anyString());
+ }
+
+ @Test
+ void uneAdresseInscriteParMotDePasseNEstPasPriseParGoogle() {
+  String state = startAndReturnState();
+  googleReturns(EMAIL, true, "Camille");
+  AppUser preempted = account(null);
+  when(users.findByEmail(EMAIL)).thenReturn(Optional.of(preempted));
+
+  assertEquals(GoogleLoginService.Outcome.COMPTE_EXISTANT, service.complete(request, response, state, "code", null));
+  assertNull(preempted.googleSub);
+  verify(users, never()).saveAndFlush(any());
+  assertNull(SecurityContextHolder.getContext().getAuthentication());
+  assertNull(request.getSession().getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY));
+ }
+
+ @Test
+ void unCompteReliéAUnAutreGoogleNEstPasPris() {
+  String state = startAndReturnState();
+  googleReturns(EMAIL, true, "Camille");
+  when(users.findByEmail(EMAIL)).thenReturn(Optional.of(account("un-autre-sub")));
+
+  assertEquals(GoogleLoginService.Outcome.COMPTE_EXISTANT, service.complete(request, response, state, "code", null));
+  verify(users, never()).saveAndFlush(any());
+ }
+
+ @Test
+ void connecteParMotDePassePuisGoogleRelieLeCompte() {
+  String state = startAndReturnState();
+  googleReturns(EMAIL, true, "Camille");
+  AppUser mine = account(null);
+  when(users.findByEmail(EMAIL)).thenReturn(Optional.of(mine));
+  when(users.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+  SecurityContextHolder.getContext().setAuthentication(
+    UsernamePasswordAuthenticationToken.authenticated(EMAIL, null, java.util.List.of()));
+
+  assertEquals(GoogleLoginService.Outcome.CONNECTE, service.complete(request, response, state, "code", null));
+  assertEquals(SUB, mine.googleSub);
+ }
+
+ @Test
+ void unAutreCompteConnecteNeRelieRien() {
+  String state = startAndReturnState();
+  googleReturns(EMAIL, true, "Camille");
+  when(users.findByEmail(EMAIL)).thenReturn(Optional.of(account(null)));
+  SecurityContextHolder.getContext().setAuthentication(
+    UsernamePasswordAuthenticationToken.authenticated("autre@medislot.test", null, java.util.List.of()));
+
+  assertEquals(GoogleLoginService.Outcome.COMPTE_EXISTANT, service.complete(request, response, state, "code", null));
+  verify(users, never()).saveAndFlush(any());
+ }
+
+ @Test
+ void uneIdentiteSansSubEstRefusee() {
+  String state = startAndReturnState();
+  String verifier = (String) session.getAttribute(GoogleLoginService.SESSION_CODE_VERIFIER);
+  when(oauthClient.exchangeLoginCode("code", verifier)).thenReturn("jeton-acces");
+  when(oauthClient.userInfo("jeton-acces")).thenReturn(new GoogleOAuthClient.GoogleIdentity(null, EMAIL, true, "Camille"));
+
+  assertEquals(GoogleLoginService.Outcome.ERREUR, service.complete(request, response, state, "code", null));
+  verifyNoInteractions(users);
  }
 
  @Test
