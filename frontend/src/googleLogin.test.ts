@@ -42,7 +42,7 @@ describe('connexion avec Google',()=>{
   expect(browser.navigateTo).not.toHaveBeenCalled();
  });
 
- it.each(['google','refuse','erreur'] as const)('lit le retour %s et le retire de l’adresse',outcome=>{
+ it.each(['google','refuse','compte-existant','erreur'] as const)('lit le retour %s et le retire de l’adresse',outcome=>{
   const browser=browserAt(`http://localhost/?connexion=${outcome}#haut`);
   expect(readLoginReturn(browser)).toEqual({outcome,message:LOGIN_RETURN_MESSAGES[outcome]});
   expect(browser.replaceCurrentUrl).toHaveBeenCalledWith('/#haut');

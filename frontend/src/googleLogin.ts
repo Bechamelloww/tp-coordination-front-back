@@ -1,11 +1,11 @@
 import {api,ApiError} from './api';
 import type {Browser} from './googleCalendar';
 
-/** Connexion « Continuer avec Google » : le back renvoie /?connexion=google|refuse|erreur après le passage chez Google. */
 export const LOGIN_RETURN_PARAMETER='connexion';
 export const LOGIN_RETURN_MESSAGES={
  google:'Vous êtes connecté avec votre compte Google.',
  refuse:'La connexion avec Google a été annulée, ou votre adresse e-mail Google n’est pas vérifiée.',
+ 'compte-existant':'Un compte MediSlot existe déjà avec cette adresse. Connectez-vous avec votre e-mail et votre mot de passe.',
  erreur:'La connexion avec Google a échoué. Réessayez, ou connectez-vous avec votre e-mail et votre mot de passe.',
 } as const;
 export type LoginOutcome=keyof typeof LOGIN_RETURN_MESSAGES;
