@@ -14,8 +14,11 @@ export function flush():Promise<void>{
 }
 
 async function sendAll(){
- const me=useSession().user?.id;
- if(me===undefined)return;                        // personne de connecté
+ const session=useSession();
+ if(!session.user)return;                         // personne de connecté
+ try{await session.load()}catch{return}
+ const me=session.user?.id;
+ if(me===undefined)return;
  await purgeExpired();                            // 24 h au plus
  const all=await (await db()).getAll('outbox');
  for(const it of all.filter(i=>i.userId===me)){   // jamais la file d'un autre compte
@@ -38,6 +41,8 @@ async function post(it:OutboxItem):Promise<Appointment>{
  catch(e){
   if(!(e instanceof ApiError)||e.status!==403)throw e;
   await refreshCsrf();                             // jeton CSRF périmé : un seul nouvel essai
+  const session=useSession();await session.load();
+  if(session.user?.id!==it.userId)throw new ApiError('La session a changé.',401);
   return send();
  }
 }
