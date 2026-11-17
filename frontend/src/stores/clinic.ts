@@ -13,6 +13,8 @@ export const useClinic=defineStore('clinic',()=>{
   history.replaceState(null,'',clinicPath(slug));
  }
  async function loadMine(){mine.value=await api<Clinic[]>('/me/clinics')}
+ /** Visiteur non connecté : tous les cabinets, pour qu'il puisse quitter celui de l'adresse. */
+ async function loadPublic(){mine.value=await api<Clinic[]>('/clinics')}
  /** Bascule vers un cabinet dont l'utilisateur est membre ; rend false sinon. */
  function switchTo(slug:string){
   const target=mine.value.find(c=>c.slug===slug);
@@ -22,5 +24,12 @@ export const useClinic=defineStore('clinic',()=>{
   return true;
  }
  function reset(){mine.value=[]}
- return {current,mine,isAdmin,init,loadMine,switchTo,reset};
+ /** Vue tous cabinets : le cabinet d'un praticien ou d'un rendez-vous devient le cabinet des appels suivants, sans changer l'adresse ni la couleur. */
+ function focus(slug:string|undefined){
+  if(!slug||slug===current.value?.slug)return;
+  setCurrentClinic(slug);current.value=mine.value.find(c=>c.slug===slug)??{slug,name:slug,city:'',color:''};
+ }
+ /** Couleur de la page : celle du cabinet, ou la couleur MediSlot en vue tous cabinets. */
+ function repaint(global:boolean){if(global)document.documentElement.style.removeProperty('--clinic');else if(current.value)paint(current.value)}
+ return {current,mine,isAdmin,init,loadMine,loadPublic,switchTo,reset,focus,repaint};
 });

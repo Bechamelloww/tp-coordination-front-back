@@ -12,9 +12,10 @@ export class ApiError extends Error {
  }
 }
 export async function refreshCsrf(){const r=await fetch('/api/csrf',{credentials:'same-origin'});if(!r.ok)throw new ApiError('Impossible de sécuriser la session.',r.status);csrf=await r.json();}
-export async function api<T>(path:string,init:RequestInit={}):Promise<T>{
+/** clinic : cabinet de cet appel (annuaire tous cabinets) ; sinon le cabinet courant. */
+export async function api<T>(path:string,init:RequestInit={},clinicOverride?:string):Promise<T>{
  const method=(init.method||'GET').toUpperCase();const headers=new Headers(init.headers);
- const clinic=currentClinic();if(clinic)headers.set('X-Clinic',clinic);
+ const clinic=clinicOverride??currentClinic();if(clinic)headers.set('X-Clinic',clinic);
  if(!['GET','HEAD','OPTIONS'].includes(method)){if(!csrf)await refreshCsrf();headers.set(csrf!.headerName,csrf!.token);}
  if(init.body&&!(init.body instanceof URLSearchParams))headers.set('Content-Type','application/json');
  const response=await fetch('/api'+path,{...init,headers,credentials:'same-origin'});

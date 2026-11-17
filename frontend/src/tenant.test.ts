@@ -40,6 +40,11 @@ describe('En-tête X-Clinic',()=>{
   await api('/professionals');
   expect(new Headers(fetchMock.mock.calls[0][1].headers).has('X-Clinic')).toBe(false);
  });
+ it('vient de l\'appel quand il est précisé (annuaire tous cabinets)',async()=>{
+  const fetchMock=vi.fn().mockResolvedValue(new Response('[]',{status:200}));vi.stubGlobal('fetch',fetchMock);
+  setCurrentClinic('cabinet-a');await api('/professionals/3/slots',{},'cabinet-b');
+  expect(new Headers(fetchMock.mock.calls[0][1].headers).get('X-Clinic')).toBe('cabinet-b');
+ });
  it('ignore un slug invalide',()=>{setCurrentClinic('A B');expect(withClinic('/api/events')).toBe('/api/events')});
  it('passe dans l\'adresse des flux temps réel',()=>{setCurrentClinic('cabinet-a');expect(withClinic('/api/events')).toBe('/api/events?clinic=cabinet-a')});
 });

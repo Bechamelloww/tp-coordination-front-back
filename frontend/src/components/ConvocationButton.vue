@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import {ref} from 'vue';
 import {openConvocation,saveConvocation,ConvocationError,FALLBACK,realBrowser,type Browser} from '../convocation';
-const props=withDefaults(defineProps<{appointmentId:number;context?:string;browser?:Browser}>(),{context:'',browser:()=>realBrowser});
+import {useClinic} from '../stores/clinic';
+const props=withDefaults(defineProps<{appointmentId:number;context?:string;browser?:Browser;clinic?:string}>(),{context:'',browser:()=>realBrowser,clinic:undefined});
+const clinicStore=useClinic();
 /** 404 ou 409 : la liste affichée n'est plus à jour (annulé ailleurs, autre onglet). */
 const emit=defineEmits<{outdated:[]}>();
 type Action='open'|'save';
@@ -9,6 +11,7 @@ const state=ref<'idle'|'loading'|'error'>('idle'),action=ref<Action|null>(null),
 async function run(kind:Action){
  if(state.value==='loading')return; // aria-disabled garde le focus mais ne bloque pas le clic
  state.value='loading';action.value=kind;error.value='';
+ clinicStore.focus(props.clinic); // vue tous cabinets : la convocation est demandée au cabinet du rendez-vous
  try{
   // openConvocation ouvre l'onglet tout de suite, pendant le clic : aucune attente avant cet appel.
   await (kind==='open'?openConvocation(props.appointmentId,props.browser):saveConvocation(props.appointmentId,props.browser));

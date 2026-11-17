@@ -35,7 +35,7 @@ public class TenantFilter extends OncePerRequestFilter {
  public static final String PARAM = "clinic";
  static final Pattern SLUG = Pattern.compile("^[a-z0-9]+(-[a-z0-9]+)*$");
  // Appels qui ne dépendent pas d'un cabinet : session, comptes, expériences A/B, retour OAuth Google.
- static final java.util.List<String> NO_CLINIC = java.util.List.of("/api/csrf", "/api/login", "/api/logout", "/api/me", "/api/master/", "/api/ab/", "/api/google/", "/api/auth/google/");
+ static final java.util.List<String> NO_CLINIC = java.util.List.of("/api/csrf", "/api/clinics", "/api/directory", "/api/login", "/api/logout", "/api/me", "/api/master/", "/api/ab/", "/api/google/", "/api/auth/google/");
 
  private final ClinicRepository clinics;
  private final MembershipRepository memberships;
@@ -83,9 +83,12 @@ public class TenantFilter extends OncePerRequestFilter {
   Optional<AppUser> user = users.findByEmail(auth.getName());
   if (user.isEmpty()) return Access.NONE;
   if (AppUser.MASTER.equals(user.get().role)) return Access.ADMIN;
-  return memberships.findByUserIdAndClinicId(user.get().id, clinic.id)
-   .map(m -> Membership.ADMIN.equals(m.role) ? Access.ADMIN : Access.MEMBER)
-   .orElse(Access.NONE);
+  Optional<Membership> membership = memberships.findByUserIdAndClinicId(user.get().id, clinic.id);
+  if (membership.isPresent() && Membership.ADMIN.equals(membership.get().role)) return Access.ADMIN;
+  // Gérant : limité aux cabinets qu'il administre (404 ailleurs, comme un cabinet inconnu).
+  if (memberships.existsByUserIdAndRole(user.get().id, Membership.ADMIN)) return Access.NONE;
+  // Patient : voit tous les cabinets ; il devient membre de celui où il réserve.
+  return membership.isPresent() ? Access.MEMBER : Access.PUBLIC;
  }
 
  private void grantClinicAdmin(Authentication auth) {
