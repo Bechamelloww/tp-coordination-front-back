@@ -1,5 +1,5 @@
 import {describe,it,expect,vi,beforeEach} from 'vitest';
-import {clinicFromPath,clinicFromHost,safeColor,withClinic,setCurrentClinic} from './tenant';
+import {clinicFromPath,clinicFromHost,safeColor,withClinic,setCurrentClinic,slugify} from './tenant';
 import {api} from './api';
 describe('Cabinet lu dans l\'URL',()=>{
  it('lit le slug dans le chemin /c/<slug>/',()=>{
@@ -42,4 +42,16 @@ describe('En-tête X-Clinic',()=>{
  });
  it('ignore un slug invalide',()=>{setCurrentClinic('A B');expect(withClinic('/api/events')).toBe('/api/events')});
  it('passe dans l\'adresse des flux temps réel',()=>{setCurrentClinic('cabinet-a');expect(withClinic('/api/events')).toBe('/api/events?clinic=cabinet-a')});
+});
+
+describe('Identifiant proposé pour un nouveau cabinet',()=>{
+ it('retire accents, majuscules et ponctuation',()=>{
+  expect(slugify('Centre médical du Port')).toBe('centre-medical-du-port');
+  expect(slugify("  L'Étoile -- Santé !  ")).toBe('l-etoile-sante');
+ });
+ it('reste valide et ne dépasse pas 40 caractères',()=>{
+  const slug=slugify('Maison pluridisciplinaire de santé des quatre saisons de la vallée');
+  expect(slug.length).toBeLessThanOrEqual(40);
+  expect(slug).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+ });
 });
