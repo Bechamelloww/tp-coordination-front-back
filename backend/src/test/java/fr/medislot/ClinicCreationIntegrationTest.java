@@ -35,9 +35,9 @@ class ClinicCreationIntegrationTest {
 
  @Test void leMasterCreeUnCabinetAvecSonAdmin() throws Exception {
   create("master@medislot.test","MASTER","""
-   {"slug":"cabinet-c","name":"Centre médical du Port","city":"Marseille","color":"#B45309","adminEmail":"Autre@medislot.test"}""")
+   {"slug":"cabinet-c","name":"Centre médical du Port","city":"Marseille","address":"12 quai du Port","color":"#B45309","adminEmail":"Autre@medislot.test"}""")
    .andExpect(status().isCreated()).andExpect(jsonPath("$.slug").value("cabinet-c")).andExpect(jsonPath("$.color").value("#b45309"))
-   .andExpect(jsonPath("$.professionals").value(0)).andExpect(jsonPath("$.admins",contains("autre@medislot.test")));
+   .andExpect(jsonPath("$.address").value("12 quai du Port")).andExpect(jsonPath("$.professionals").value(0)).andExpect(jsonPath("$.admins",contains("autre@medislot.test")));
   mvc.perform(get("/api/master/clinics").with(user("master@medislot.test").roles("MASTER"))).andExpect(jsonPath("$[*].slug",hasItem("cabinet-c")));
   mvc.perform(get("/api/admin/overview").header("X-Clinic","cabinet-c").with(user("autre@medislot.test").roles("PATIENT")))
    .andExpect(status().isOk()).andExpect(jsonPath("$.admins").value(1));
@@ -45,29 +45,35 @@ class ClinicCreationIntegrationTest {
 
  @Test void unCabinetSansAdminEstAccepte() throws Exception {
   create("master@medislot.test","MASTER","""
-   {"slug":"cabinet-sans-admin","name":"Cabinet du Lac","city":"Annecy","color":"#0f766e"}""")
+   {"slug":"cabinet-sans-admin","name":"Cabinet du Lac","city":"Annecy","address":"3 rue du Lac","color":"#0f766e"}""")
    .andExpect(status().isCreated()).andExpect(jsonPath("$.admins",empty()));
  }
 
  @Test void unIdentifiantDejaPrisEst409() throws Exception {
   create("master@medislot.test","MASTER","""
-   {"slug":"cabinet-a","name":"Doublon","city":"Paris","color":"#000000"}""").andExpect(status().isConflict());
+   {"slug":"cabinet-a","name":"Doublon","city":"Paris","address":"1 rue X","color":"#000000"}""").andExpect(status().isConflict());
  }
 
  @Test void lesChampsInvalidesSontSignalesUnParUn() throws Exception {
   create("master@medislot.test","MASTER","""
-   {"slug":"Cabinet C","name":"","city":"Nice","color":"bleu"}""")
-   .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors[*].field",hasItems("slug","name","color")));
+   {"slug":"Cabinet C","name":"","city":"Nice","address":" ","color":"bleu"}""")
+   .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors[*].field",hasItems("slug","name","address","color")));
  }
 
  @Test void unAdminInconnuEst400EtRienNEstCree() throws Exception {
   create("master@medislot.test","MASTER","""
-   {"slug":"cabinet-fantome","name":"Fantôme","city":"Lille","color":"#123456","adminEmail":"personne@medislot.test"}""").andExpect(status().isBadRequest());
+   {"slug":"cabinet-fantome","name":"Fantôme","city":"Lille","address":"5 rue Y","color":"#123456","adminEmail":"personne@medislot.test"}""").andExpect(status().isBadRequest());
   mvc.perform(get("/api/master/clinics").with(user("master@medislot.test").roles("MASTER"))).andExpect(jsonPath("$[*].slug",not(hasItem("cabinet-fantome"))));
  }
 
  @Test void seulLeMasterPeutCreer() throws Exception {
   create("admin-a@medislot.test","PATIENT","""
-   {"slug":"cabinet-pirate","name":"Pirate","city":"Paris","color":"#123456"}""").andExpect(status().isForbidden());
+   {"slug":"cabinet-pirate","name":"Pirate","city":"Paris","address":"1 rue Z","color":"#123456"}""").andExpect(status().isForbidden());
+ }
+
+ @Test void laListeDesAdminsPossiblesExclutLesMasters() throws Exception {
+  mvc.perform(get("/api/master/accounts").with(user("master@medislot.test").roles("MASTER"))).andExpect(status().isOk())
+   .andExpect(jsonPath("$[*].email",hasItems("autre@medislot.test","admin-a@medislot.test"))).andExpect(jsonPath("$[*].email",not(hasItem("master@medislot.test"))));
+  mvc.perform(get("/api/master/accounts").with(user("admin-a@medislot.test").roles("PATIENT"))).andExpect(status().isForbidden());
  }
 }
