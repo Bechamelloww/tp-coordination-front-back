@@ -34,4 +34,9 @@ class LoginThrottlingIntegrationTest {
    .andExpect(content().contentTypeCompatibleWith("application/problem+json"));
   login("patient@medislot.test",PASSWORD).andExpect(status().isNoContent());
  }
+ @Test void blocksEncodedSpellingsOfTheLoginPath() throws Exception {
+  for(int i=0;i<LoginAttempts.MAX_FAILURES;i++)login("encode@medislot.test","mauvais-mot-de-passe").andExpect(status().isUnauthorized());
+  mvc.perform(post(java.net.URI.create("/api/%6cogin")).with(csrf()).param("username","encode@medislot.test").param("password","mauvais-mot-de-passe"))
+   .andExpect(status().isTooManyRequests());
+ }
 }

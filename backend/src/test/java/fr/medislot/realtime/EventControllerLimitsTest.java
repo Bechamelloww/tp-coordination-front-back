@@ -17,6 +17,11 @@ class EventControllerLimitsTest {
   for(int i=0;i<EventController.MAX_PUBLIC;i++)events.publicEvents();
   assertEquals(503,assertThrows(ResponseStatusException.class,events::publicEvents).getStatusCode().value());
  }
+ @Test void aFullClinicDoesNotBlockTheOthers(){
+  for(int i=0;i<EventController.MAX_PUBLIC;i++)events.publicEvents();
+  TenantContext.set(2L);
+  assertNotNull(events.publicEvents());
+ }
  @Test void privateStreamIsCappedPerPatient(){
   when(booking.patient("patient@medislot.test")).thenReturn(1L);
   when(booking.patient("autre@medislot.test")).thenReturn(2L);

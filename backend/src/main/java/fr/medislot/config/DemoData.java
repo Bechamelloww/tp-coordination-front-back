@@ -19,8 +19,7 @@ public class DemoData implements CommandLineRunner {
   if(demoPassword.isBlank())throw new IllegalStateException("medislot.demo-seed=true exige DEMO_PASSWORD.");
   users=u;professionals=p;slots=s;encoder=e;this.jdbc=jdbc;this.tx=new TransactionTemplate(txManager);this.demoPassword=demoPassword;}
  @Override public void run(String...args){
-  for(String[] a:ACCOUNTS)if(!users.existsByEmail(a[0])){AppUser u=new AppUser();u.email=a[0];u.name=a[1];u.role=a[2];u.password=encoder.encode(demoPassword);users.save(u);}
-  seedMemberships();
+  seedMemberships(seedAccounts());
   seedClinic("cabinet-a",ROWS_A);
   seedClinic("cabinet-b",ROWS_B);
  }
@@ -52,9 +51,18 @@ public class DemoData implements CommandLineRunner {
   finally{TenantContext.clear();}
  }
  // patient@ est membre des deux cabinets, autre@ seulement de cabinet-a
- private void seedMemberships(){
+ java.util.Set<String> seedAccounts(){
+  var demo=new java.util.HashSet<String>();
+  for(String[] a:ACCOUNTS){
+   var existing=users.findByEmail(a[0]);
+   if(existing.isEmpty()){AppUser u=new AppUser();u.email=a[0];u.name=a[1];u.role=a[2];u.password=encoder.encode(demoPassword);users.save(u);demo.add(a[0]);}
+   else if(encoder.matches(demoPassword,existing.get().password))demo.add(a[0]);
+  }
+  return demo;
+ }
+ void seedMemberships(java.util.Set<String> demo){
   for(String[] m:new String[][]{{"patient@medislot.test","cabinet-a","MEMBER"},{"patient@medislot.test","cabinet-b","MEMBER"},{"autre@medislot.test","cabinet-a","MEMBER"},{"admin-a@medislot.test","cabinet-a","ADMIN"},{"admin-b@medislot.test","cabinet-b","ADMIN"}})
-   jdbc.update("insert into membership(user_id,clinic_id,role) select u.id,c.id,? from app_user u,clinic c where u.email=? and c.slug=? on conflict do nothing",m[2],m[0],m[1]);
+   if(demo.contains(m[0]))jdbc.update("insert into membership(user_id,clinic_id,role) select u.id,c.id,? from app_user u,clinic c where u.email=? and c.slug=? on conflict do nothing",m[2],m[0],m[1]);
  }
  private void seedProfessionals(String[][] rows){
   // Positions : mêmes valeurs que la migration V5 (géocodage OpenStreetMap, données fictives).

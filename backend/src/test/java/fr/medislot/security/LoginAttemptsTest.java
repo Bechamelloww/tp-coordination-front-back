@@ -42,6 +42,16 @@ class LoginAttemptsTest {
   fail("patient@medislot.test",LoginAttempts.MAX_FAILURES-1);
   assertFalse(attempts.blocked("patient@medislot.test"));
  }
+ @Test void keepsCountingWhenTheTableIsFull(){
+  for(int i=0;i<LoginAttempts.MAX_TRACKED;i++)attempts.failed("remplissage"+i+"@exemple.test");
+  fail("patient@medislot.test",LoginAttempts.MAX_FAILURES);
+  assertTrue(attempts.blocked("patient@medislot.test"));
+ }
+ @Test void aFloodOfNewAddressesDoesNotUnblockAnAccount(){
+  fail("patient@medislot.test",LoginAttempts.MAX_FAILURES);
+  for(int i=0;i<2*LoginAttempts.MAX_TRACKED;i++)attempts.failed("remplissage"+i+"@exemple.test");
+  assertTrue(attempts.blocked("patient@medislot.test"));
+ }
  @Test void missingAddressDoesNotFail(){
   attempts.failed(null);
   assertFalse(attempts.blocked(null));

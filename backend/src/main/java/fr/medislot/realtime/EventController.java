@@ -20,10 +20,11 @@ public class EventController {
  @GetMapping(value="/api/events",produces="text/event-stream") public SseEmitter publicEvents(){return connect(null);}
  @GetMapping(value="/api/notifications/events",produces="text/event-stream") public SseEmitter privateEvents(Principal p){return connect(booking.patient(p.getName()));}
  private synchronized Subscriber admit(SseEmitter emitter,Long patient){
-  long same=clients.stream().filter(c->Objects.equals(c.patient,patient)).count();
+  Long clinic=TenantContext.require();
+  long same=clients.stream().filter(c->Objects.equals(c.patient,patient)&&(patient!=null||c.clinicId.equals(clinic))).count();
   if(patient==null&&same>=MAX_PUBLIC)throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Trop de connexions en direct. Réessayez plus tard.");
   if(patient!=null&&same>=MAX_PER_PATIENT)throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,"Trop d'onglets ouverts sur les notifications.");
-  Subscriber s=new Subscriber(emitter,patient,TenantContext.require());clients.add(s);return s;
+  Subscriber s=new Subscriber(emitter,patient,clinic);clients.add(s);return s;
  }
  private SseEmitter connect(Long patient){SseEmitter emitter=new SseEmitter(120000L);Subscriber s=admit(emitter,patient);emitter.onCompletion(()->clients.remove(s));emitter.onTimeout(()->{clients.remove(s);emitter.complete();});emitter.onError(e->clients.remove(s));send(s,"ready",Map.of("resync",true));return emitter;}
  private void send(Subscriber s,String name,Object data){try{s.emitter.send(SseEmitter.event().name(name).data(data));}catch(Exception ex){clients.remove(s);s.emitter.complete();}}
