@@ -36,3 +36,4 @@
 @media(max-width:650px){.admin-form-grid{grid-template-columns:1fr}}
 
 @media(max-width:650px){.header{position:relative}.notices-menu{position:static}.notices-panel{top:calc(100% - 6px);left:16px;right:16px;width:auto;max-width:none}.notices-panel::before{display:none}}
+.admin-logs-scope select{padding:8px 12px;border-radius:7px;border:1px solid #6f8798;background:white;color:var(--navy);font-size:14px}.admin-logs-note{margin:-6px 0 14px}.admin-logs-date{white-space:nowrap;color:var(--muted)}.admin-block>.text-button{margin-top:10px}
