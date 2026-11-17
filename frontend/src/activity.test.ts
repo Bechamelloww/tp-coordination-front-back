@@ -26,5 +26,8 @@ describe('selectableActions',()=>{
  it('masque au directeur les actions hors cabinet',()=>{
   expect(selectableActions(false)).not.toContain('LOGIN');
   expect(selectableActions(true)).toContain('LOGIN');
+  expect(selectableActions(false)).toContain('CLINIC_UPDATED');
+  expect(selectableActions(false)).not.toContain('CLINIC_DELETED');
+  expect(selectableActions(true)).toContain('CLINIC_DELETED');
  });
 });

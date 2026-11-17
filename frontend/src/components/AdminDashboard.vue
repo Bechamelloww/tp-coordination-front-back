@@ -31,7 +31,7 @@ const blank=()=>({name:'',city:'',address:'',slug:'',color:'#0873b9',adminEmail:
 const accounts=ref<{email:string;name:string}[]>([]);
 const creating=ref(false),saving=ref(false),form=ref(blank()),slugTouched=ref(false),formError=ref(''),fieldErrors=ref<Record<string,string>>({}),created=ref('');
 watch(()=>form.value.name,name=>{if(!slugTouched.value)form.value.slug=slugify(name)});
-function openForm(){api<{email:string;name:string}[]>('/master/accounts').then(a=>accounts.value=a).catch(()=>{accounts.value=[]});creating.value=true;created.value='';form.value=blank();slugTouched.value=false;formError.value='';fieldErrors.value={}}
+function openForm(){editing.value=null;confirming.value=null;api<{email:string;name:string}[]>('/master/accounts').then(a=>accounts.value=a).catch(()=>{accounts.value=[]});creating.value=true;created.value='';form.value=blank();slugTouched.value=false;formError.value='';fieldErrors.value={}}
 async function createClinic(){
  if(saving.value)return;saving.value=true;formError.value='';fieldErrors.value={};
  try{
@@ -42,6 +42,43 @@ async function createClinic(){
   await clinic.loadMine().catch(()=>{});
  }catch(e){formError.value=e instanceof Error?e.message:'Création impossible.';if(e instanceof ApiError)fieldErrors.value=e.fields}
  finally{saving.value=false}
+}
+
+// Modification d'un cabinet (master) : tout sauf l'identifiant, qui reste dans les adresses /c/<slug>/ déjà partagées.
+const editing=ref<ClinicStats|null>(null),editForm=ref({name:'',city:'',address:'',color:''}),editBusy=ref(false),editError=ref(''),editErrors=ref<Record<string,string>>({});
+function openEdit(c:ClinicStats){
+ creating.value=false;confirming.value=null;created.value='';editError.value='';editErrors.value={};
+ editing.value=c;editForm.value={name:c.name,city:c.city,address:c.address??'',color:c.color};
+ void nextTick(()=>document.getElementById('edit-name')?.focus());
+}
+async function saveEdit(){
+ const target=editing.value;if(!target||editBusy.value)return;editBusy.value=true;editError.value='';editErrors.value={};
+ try{
+  const c=await api<ClinicStats>(`/master/clinics/${encodeURIComponent(target.slug)}`,{method:'PUT',body:JSON.stringify(editForm.value)});
+  all.value=all.value.map(x=>x.slug===c.slug?c:x);
+  editing.value=null;created.value=`Le cabinet « ${c.name} » a été modifié.`;
+  if(clinic.current?.slug===c.slug){clinic.current={...clinic.current,name:c.name,city:c.city,color:c.color};clinic.repaint(false)}
+  await clinic.loadMine().catch(()=>{});
+ }catch(e){editError.value=e instanceof Error?e.message:'Modification impossible.';if(e instanceof ApiError)editErrors.value=e.fields}
+ finally{editBusy.value=false}
+}
+
+// Suppression (master) : le back refuse tant qu'il reste des rendez-vous à venir ; l'historique est conservé.
+const confirming=ref<string|null>(null),deleting=ref(false),deleteError=ref('');
+function askDelete(c:ClinicStats){
+ editing.value=null;creating.value=false;created.value='';deleteError.value='';confirming.value=c.slug;
+ void nextTick(()=>document.getElementById(`cancel-delete-${c.slug}`)?.focus());
+}
+async function confirmDelete(c:ClinicStats){
+ if(deleting.value)return;deleting.value=true;deleteError.value='';
+ try{
+  await api<void>(`/master/clinics/${encodeURIComponent(c.slug)}`,{method:'DELETE'});
+  all.value=all.value.filter(x=>x.slug!==c.slug);confirming.value=null;
+  created.value=`Le cabinet « ${c.name} » a été supprimé.`;
+  await clinic.loadMine().catch(()=>{});
+  if(clinic.current?.slug===c.slug&&all.value.length)emit('open',all.value[0].slug);
+ }catch(e){deleteError.value=e instanceof Error?e.message:'Suppression impossible.'}
+ finally{deleting.value=false}
 }
 
 // Ajout d'un membre au cabinet affiché. Le master choisit dans la liste des comptes ; un admin saisit l'e-mail
@@ -111,6 +148,18 @@ function refresh(){
     <p role="alert" class="error-text"><template v-if="formError">{{formError}}</template></p>
     <div class="admin-form-actions"><button type="submit" class="primary" :aria-disabled="saving">{{saving?'Création…':'Créer le cabinet'}}</button><button type="button" class="text-button" @click="creating=false">Annuler</button></div>
    </form>
+   <form v-if="editing" class="admin-form" novalidate @submit.prevent="saveEdit">
+    <h3>Modifier « {{editing.name}} »</h3>
+    <div class="admin-form-grid">
+     <div class="field"><label for="edit-name">Nom</label><input id="edit-name" v-model="editForm.name" maxlength="120" :aria-invalid="!!editErrors.name"><p v-if="editErrors.name" class="error-text">{{editErrors.name}}</p></div>
+     <div class="field"><label for="edit-city">Ville</label><input id="edit-city" v-model="editForm.city" maxlength="80" :aria-invalid="!!editErrors.city"><p v-if="editErrors.city" class="error-text">{{editErrors.city}}</p></div>
+     <div class="field"><label for="edit-slug">Identifiant dans l’adresse</label><input id="edit-slug" :value="editing.slug" readonly aria-describedby="edit-slug-hint"><p id="edit-slug-hint" class="hint">Ne change pas : les liens déjà partagés restent valables.</p></div>
+     <div class="field"><label for="edit-color">Couleur</label><input id="edit-color" v-model="editForm.color" type="color" :aria-invalid="!!editErrors.color"><p v-if="editErrors.color" class="error-text">{{editErrors.color}}</p></div>
+     <div class="field wide"><label for="edit-address">Adresse postale</label><input id="edit-address" v-model="editForm.address" maxlength="200" autocomplete="off" :aria-invalid="!!editErrors.address"><p v-if="editErrors.address" class="error-text">{{editErrors.address}}</p></div>
+    </div>
+    <p role="alert" class="error-text"><template v-if="editError">{{editError}}</template></p>
+    <div class="admin-form-actions"><button type="submit" class="primary" :aria-disabled="editBusy">{{editBusy?'Enregistrement…':'Enregistrer'}}</button><button type="button" class="text-button" @click="editing=null">Annuler</button></div>
+   </form>
    <div class="admin-clinics">
     <article v-for="c in all" :key="c.slug" class="admin-clinic" :class="{current:c.slug===clinic.current?.slug}" :style="{'--option':safeColor(c.color)}">
      <h3>{{c.name}}</h3>
@@ -119,6 +168,12 @@ function refresh(){
      <p class="admin-clinic-admins">{{c.admins.length?c.admins.join(' · '):'Aucun admin'}}</p>
      <button v-if="c.slug!==clinic.current?.slug" class="text-button" @click="emit('open',c.slug)">Ouvrir ce cabinet <span aria-hidden="true">→</span></button>
      <p v-else class="admin-clinic-here">Cabinet affiché</p>
+     <div v-if="confirming===c.slug" class="admin-clinic-confirm" role="group" :aria-labelledby="`confirm-${c.slug}`">
+      <p :id="`confirm-${c.slug}`">Supprimer ce cabinet ? Il disparaîtra pour tout le monde. Les rendez-vous passés et l’historique sont conservés.</p>
+      <p role="alert" class="error-text"><template v-if="deleteError">{{deleteError}}</template></p>
+      <div class="admin-clinic-actions"><button type="button" class="danger-button" :aria-disabled="deleting" @click="confirmDelete(c)">{{deleting?'Suppression…':'Supprimer'}}</button><button :id="`cancel-delete-${c.slug}`" type="button" class="text-button" @click="confirming=null">Annuler</button></div>
+     </div>
+     <div v-else class="admin-clinic-actions"><button type="button" class="text-button" :aria-label="`Modifier ${c.name}`" @click="openEdit(c)">Modifier</button><button type="button" class="text-button danger-link" :aria-label="`Supprimer ${c.name}`" @click="askDelete(c)">Supprimer</button></div>
     </article>
    </div>
   </section>
