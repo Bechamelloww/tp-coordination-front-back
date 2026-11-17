@@ -63,4 +63,17 @@ class RolesIntegrationTest {
   call("/api/me/clinics",null,"admin-a@medislot.test","PATIENT").andExpect(jsonPath("$[0].slug").value("cabinet-a")).andExpect(jsonPath("$[0].role").value("ADMIN"));
   call("/api/me/clinics",null,"patient@medislot.test","PATIENT").andExpect(jsonPath("$[*].role",everyItem(is("MEMBER"))));
  }
+
+ @Test void lePatientVoitTousLesCabinetsEtLeGerantSeulementLeSien() throws Exception {
+  call("/api/me/clinics",null,"autre@medislot.test","PATIENT").andExpect(jsonPath("$[*].slug",hasItems("cabinet-a","cabinet-b")))
+   .andExpect(jsonPath("$[?(@.slug=='cabinet-b')].role",contains(nullValue())));
+  call("/api/professionals","cabinet-b","autre@medislot.test","PATIENT").andExpect(status().isOk());
+  call("/api/me/clinics",null,"admin-a@medislot.test","PATIENT").andExpect(jsonPath("$[*].slug",contains("cabinet-a")));
+  call("/api/professionals","cabinet-b","admin-a@medislot.test","PATIENT").andExpect(status().isNotFound());
+ }
+
+ @Test void unVisiteurNonConnecteVoitLaListeDesCabinets() throws Exception {
+  mvc.perform(get("/api/clinics")).andExpect(status().isOk()).andExpect(jsonPath("$[*].slug",hasItems("cabinet-a","cabinet-b")))
+   .andExpect(jsonPath("$[0].role").value(nullValue()));
+ }
 }

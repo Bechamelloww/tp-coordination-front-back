@@ -10,7 +10,9 @@ const autour=ref(false),proches=ref<Proche[]>([]);
 /** Distance à vol d'oiseau depuis la position de la personne, calculée dans le navigateur ; null si inconnue. */
 function distanceDe(p:Professional):number|null{const pos=localisation.position.value;return pos&&p.latitude!=null&&p.longitude!=null?distanceKm(pos,{latitude:p.latitude,longitude:p.longitude}):null}
 const session=useSession(),clinic=useClinic(),live=useLive(),personalLive=useLive(),ab=useExperiment(),booking=useBookingDraft();
-const view=ref<'search'|'appointments'|'admin'>('search'),loading=ref(false),busy=ref(false),error=ref(''),success=ref('');
+const view=ref<'search'|'appointments'|'admin'>('search'),
+ // Vue tous cabinets : visiteur ou patient (ni master, ni admin d'un cabinet). Pas de sélecteur, l'annuaire réunit tous les cabinets.
+ global=computed(()=>!session.user||(session.user.role!=='MASTER'&&!clinic.mine.some(c=>c.role==='ADMIN'))),loading=ref(false),busy=ref(false),error=ref(''),success=ref('');
 const q=ref(''),city=ref(''),specialty=ref(''),page=ref(0),total=ref(0),doctors=ref<Professional[]>([]),slots=ref<Record<number,Slot[]>>({});
 const appointments=ref<Appointment[]>([]),notices=ref<Notice[]>([]),profile=ref<Professional|null>(null);
 const seenNoticeIds=new Set<number>();
@@ -59,31 +61,32 @@ let searchGeneration=0;
 async function search(reset=false){if(reset)page.value=0;const generation=++searchGeneration;loading.value=true;error.value='';try{
  const centre=autour.value?localisation.position.value:null;
  if(centre){const r=autourDe(centre,await annuaireComplet());if(generation!==searchGeneration)return;proches.value=r;doctors.value=r.map(x=>x.professional);total.value=r.length;}
- else{const result=await api<Page<Professional>>('/professionals?'+new URLSearchParams({q:q.value,city:city.value,specialty:specialty.value,page:String(page.value),size:'6'}));if(generation!==searchGeneration)return;doctors.value=result.items;total.value=result.total;}
+ else{const result=await api<Page<Professional>>((global.value?'/directory?':'/professionals?')+new URLSearchParams({q:q.value,city:city.value,specialty:specialty.value,page:String(page.value),size:'6'}));if(generation!==searchGeneration)return;doctors.value=result.items;total.value=result.total;}
  await loadSlots();}catch(e){error.value=message(e)}finally{if(generation===searchGeneration)loading.value=false}}
 /** Tout l'annuaire filtré par nom et spécialité (la ville cède la place à la position), par pages de 50. */
-async function annuaireComplet(){const tous:Professional[]=[];for(let p=0;;p++){const r=await api<Page<Professional>>('/professionals?'+new URLSearchParams({q:q.value,specialty:specialty.value,page:String(p),size:'50'}));tous.push(...r.items);if(!r.items.length||tous.length>=r.total)return tous;}}
+async function annuaireComplet(){const tous:Professional[]=[];for(let p=0;;p++){const r=await api<Page<Professional>>((global.value?'/directory?':'/professionals?')+new URLSearchParams({q:q.value,specialty:specialty.value,page:String(p),size:'50'}));tous.push(...r.items);if(!r.items.length||tous.length>=r.total)return tous;}}
 /** « Autour de moi » : la position n'est demandée qu'ici, sur ce clic. Un refus laisse la liste telle quelle. */
 async function autourDeMoi(){if(!await localisation.localiser())return;autour.value=true;city.value='';await search(true);}
 function quitterAutour(){autour.value=false;proches.value=[];void search(true);}
 function oublierPosition(){localisation.oublier();if(autour.value)quitterAutour();}
-async function loadSlots(){const entries=await Promise.all(doctors.value.map(async p=>[p.id,await api<Slot[]>(`/professionals/${p.id}/slots`)] as const));slots.value=Object.fromEntries(entries);}
+async function loadSlots(){const entries=await Promise.all(doctors.value.map(async p=>[p.id,await api<Slot[]>(`/professionals/${p.id}/slots`,{},global.value?p.clinicSlug:undefined)] as const));slots.value=Object.fromEntries(entries);}
 function message(e:unknown){return e instanceof TypeError?'Connexion impossible. Vérifiez le réseau puis réessayez.':e instanceof Error?e.message:'Une erreur est survenue.'}
 /**
  * Règle « un rendez-vous à venir par praticien » (contrôlée par le serveur : 409 ALREADY_BOOKED) : le plus proche par praticien.
  * Pendant un déplacement, le rendez-vous déplacé ne bloque pas son propre praticien.
  */
 const upcomingByProfessional=computed(()=>upcomingByPro(appointments.value,Date.now(),moveId.value));
-async function refreshAppointments(){if(!session.user)return;appointments.value=await api<Appointment[]>('/appointments');}
-async function refreshNotices(){if(!session.user)return;const list=await api<Notice[]>('/notifications');notices.value=list.map(n=>!n.readAt&&seenNoticeIds.has(n.id)?{...n,readAt:new Date().toISOString()}:n);}
+async function refreshAppointments(){if(!session.user)return;appointments.value=await api<Appointment[]>(global.value?'/me/appointments':'/appointments');}
+async function refreshNotices(){if(!session.user)return;const list=await api<Notice[]>(global.value?'/me/notifications':'/notifications');notices.value=list.map(n=>!n.readAt&&seenNoticeIds.has(n.id)?{...n,readAt:new Date().toISOString()}:n);}
 async function markNoticesRead(ids:number[]){
  ids.forEach(id=>seenNoticeIds.add(id));
  const readAt=new Date().toISOString();
  notices.value=notices.value.map(n=>ids.includes(n.id)&&!n.readAt?{...n,readAt}:n);
- await api('/notifications/read',{method:'POST',body:JSON.stringify({ids})}).catch(()=>{});
+ await api(global.value?'/me/notifications/read':'/notifications/read',{method:'POST',body:JSON.stringify({ids})}).catch(()=>{});
 }
 // Temps 1 : choisir un créneau ouvre le formulaire (après connexion si besoin).
 function choose(professional:Professional,slot:Slot){success.value='';error.value='';profile.value=null;
+ if(global.value)clinic.focus(professional.clinicSlug);
  if(moveId.value){chosen.value={professional,slot};return}
  if(!session.user){pendingChoice.value={professional,slot};openAuth();return}
  startBooking(professional,slot);
@@ -101,7 +104,7 @@ async function authenticate(){if(busy.value)return;busy.value=true;authError.val
  finally{busy.value=false}}
 async function confirm(){if(busy.value||!chosen.value||!moveId.value)return;busy.value=true;error.value='';try{await api(`/appointments/${moveId.value}`,{method:'PATCH',body:JSON.stringify({slotId:chosen.value.slot.id})});success.value='Votre rendez-vous a été déplacé.';chosen.value=null;moveId.value=null;await refreshAppointments();await refreshNotices();await loadSlots();view.value='appointments';}catch(e){error.value=message(e);if(e instanceof ApiError&&e.status===409){chosen.value=null;await loadSlots();}}finally{busy.value=false}}
 async function cancel(){if(busy.value||cancelId.value===null)return;busy.value=true;try{await api(`/appointments/${cancelId.value}/cancel`,{method:'POST'});cancelId.value=null;success.value='Votre rendez-vous a été annulé.';await refreshAppointments();await loadSlots();await refreshNotices();}catch(e){error.value=message(e)}finally{busy.value=false}}
-async function move(a:Appointment){moveId.value=a.id;autour.value=false;q.value=a.professionalName;city.value='';specialty.value='';view.value='search';await search(true);success.value='Choisissez un nouveau créneau. Votre réservation actuelle reste conservée jusqu’à confirmation.';}
+async function move(a:Appointment){if(global.value)clinic.focus(a.clinicSlug);moveId.value=a.id;autour.value=false;q.value=a.professionalName;city.value='';specialty.value='';view.value='search';await search(true);success.value='Choisissez un nouveau créneau. Votre réservation actuelle reste conservée jusqu’à confirmation.';}
 async function showHistory(id:number){try{history.value=await api(`/appointments/${id}/history`)}catch(e){error.value=message(e)}}
 // Déconnexion volontaire : brouillon et file effacés de l'appareil (une session expirée, elle, garde tout).
 async function logout(){const id=session.user?.id;try{await session.logout();if(id!==undefined)await clearOfflineData(id).catch(()=>{});booking.forget();offer.value=null;ab.clear();personalLive.close();notices.value=[];appointments.value=[];view.value='search';moveId.value=null;}catch(e){error.value=message(e)}}
@@ -122,9 +125,10 @@ async function onClinicChanged(){
  await search(true);
 }
 watch(()=>clinic.isAdmin,admin=>{if(!admin&&view.value==='admin')view.value='search'});
+watch(global,g=>{clinic.repaint(g);if(!g&&clinic.mine.length&&!clinic.mine.some(c=>c.slug===clinic.current?.slug)){if(clinic.switchTo(clinic.mine[0].slug)){void onClinicChanged();return}}void search(true);refreshAppointments().catch(()=>{});refreshNotices().catch(()=>{})},{flush:'post'});
 function openClinic(slug:string){if(clinic.switchTo(slug))void onClinicChanged()}
 watch(()=>session.user,async user=>{personalLive.close();offer.value=null;
- if(!user){ab.reset();booking.forget();clinic.reset();return}
+ if(!user){ab.reset();booking.forget();clinic.reset();clinic.loadPublic().catch(()=>{});return}
  clinic.loadMine().catch(()=>{});
  ab.load(user.id);refreshNotices().catch(()=>{});refreshAppointments().catch(()=>{});connectPersonal();
  const d=await loadDraft(user.id).catch(()=>null);
@@ -139,7 +143,9 @@ onMounted(async()=>{document.addEventListener('keydown',trap);
  const googleReturn=readGoogleReturn(googleBrowser),loginReturn=readLoginReturn(googleBrowser);
  googleLoginEnabled().then(v=>googleLogin.value=v);
  try{await clinic.init()}catch(e){error.value=message(e);return}
+ clinic.repaint(global.value);
  await search();try{await session.load()}catch(e){error.value=message(e)}
+ if(!session.user)clinic.loadPublic().catch(()=>{});
  if(loginReturn&&loginReturn.outcome==='google'&&session.user)success.value=loginReturn.message;else if(loginReturn&&loginReturn.outcome!=='google'){openAuth();authError.value=loginReturn.message;}
  if(googleReturn){success.value=googleReturn.message;if(session.user){view.value='appointments';refreshAppointments().catch(e=>error.value=message(e));}}
  live.connect(withClinic('/api/events'),()=>loadSlots().catch(()=>{}));});
@@ -147,7 +153,7 @@ onBeforeUnmount(()=>document.removeEventListener('keydown',trap));
 </script>
 <template>
  <a href="#main" class="skip">Aller au contenu</a>
- <header class="header"><button class="brand" @click="view='search';moveId=null">MediSlot<span class="brand-dot">.</span></button><ClinicSwitcher @switched="onClinicChanged"/><nav aria-label="Navigation principale"><button :aria-current="view==='search'?'page':undefined" @click="view='search'">Trouver un praticien</button><button :aria-current="view==='appointments'?'page':undefined" @click="myAppointments">Mes rendez-vous</button><button v-if="clinic.isAdmin" :aria-current="view==='admin'?'page':undefined" @click="view='admin'">Administration</button><NotificationsMenu v-if="session.user" :notices="notices" @read="markNoticesRead"/><button v-if="!session.user" class="login" @click="openAuth">Se connecter</button><button v-else class="login" @click="logout">{{session.user.name.split(' ')[0]}} · Déconnexion</button></nav></header>
+ <header class="header"><button class="brand" @click="view='search';moveId=null">MediSlot<span class="brand-dot">.</span></button><ClinicSwitcher v-if="!global" @switched="onClinicChanged"/><nav aria-label="Navigation principale"><button :aria-current="view==='search'?'page':undefined" @click="view='search'">Trouver un praticien</button><button :aria-current="view==='appointments'?'page':undefined" @click="myAppointments">Mes rendez-vous</button><button v-if="clinic.isAdmin" :aria-current="view==='admin'?'page':undefined" @click="view='admin'">Administration</button><NotificationsMenu v-if="session.user" :notices="notices" @read="markNoticesRead"/><button v-if="!session.user" class="login" @click="openAuth">Se connecter</button><button v-else class="login" @click="logout">{{session.user.name.split(' ')[0]}} · Déconnexion</button></nav></header>
  <!-- Une seule région principale : elle commence au bandeau de recherche et à son h1 (cible du lien d'évitement). -->
  <main id="main" tabindex="-1">
  <NetworkBanner/>
@@ -167,7 +173,7 @@ onBeforeUnmount(()=>document.removeEventListener('keydown',trap));
    <div v-if="!autour&&total>6" class="pagination"><button :disabled="page===0" @click="page--;search()">Précédent</button><span>Page {{page+1}}</span><button :disabled="(page+1)*6>=total" @click="page++;search()">Suivant</button></div>
   </template>
   <AdminDashboard v-else-if="view==='admin'" @open="openClinic"/>
-  <template v-else><div class="section-title"><div><p class="eyebrow dark">VOTRE ESPACE</p><h1 tabindex="-1">Mes rendez-vous</h1></div><button class="primary" @click="view='search'">Prendre rendez-vous</button></div><GoogleCalendarCard/><p v-if="!appointments.length" class="empty">Vous n’avez pas encore de rendez-vous.</p><article v-for="a in appointments" :key="a.id" class="appointment"><div class="appointment-date"><strong>{{dateLabel(a.startsAt)}}</strong><span>{{timeLabel(a.startsAt)}}</span></div><div class="appointment-person"><h2>{{a.professionalName}}</h2><p>{{specialties[a.specialty]}} · {{a.city}}</p><span class="status" :class="{cancelled:a.status==='CANCELLED'}">{{a.status==='CONFIRMED'?'Confirmé':'Annulé'}}</span></div><div class="appointment-actions"><button v-if="a.status==='CONFIRMED'" @click="move(a)">Déplacer <span class="sr-only">le rendez-vous du {{dateLabel(a.startsAt)}} à {{timeLabel(a.startsAt)}} avec {{a.professionalName}}</span></button><button v-if="a.status==='CONFIRMED'" class="danger-link" @click="cancelId=a.id">Annuler <span class="sr-only">le rendez-vous du {{dateLabel(a.startsAt)}} à {{timeLabel(a.startsAt)}} avec {{a.professionalName}}</span></button><ConvocationButton v-if="a.status==='CONFIRMED'" :appointment-id="a.id" :context="`du rendez-vous du ${dateLabel(a.startsAt)} à ${timeLabel(a.startsAt)} avec ${a.professionalName}`" @outdated="refreshAppointments"/><p v-else class="convocation-off">Plus de convocation : rendez-vous annulé.</p><button class="text-button" @click="showHistory(a.id)">Historique <span class="sr-only">du rendez-vous du {{dateLabel(a.startsAt)}} à {{timeLabel(a.startsAt)}} avec {{a.professionalName}}</span></button></div></article></template>
+  <template v-else><div class="section-title"><div><p class="eyebrow dark">VOTRE ESPACE</p><h1 tabindex="-1">Mes rendez-vous</h1></div><button class="primary" @click="view='search'">Prendre rendez-vous</button></div><GoogleCalendarCard/><p v-if="!appointments.length" class="empty">Vous n’avez pas encore de rendez-vous.</p><article v-for="a in appointments" :key="a.id" class="appointment"><div class="appointment-date"><strong>{{dateLabel(a.startsAt)}}</strong><span>{{timeLabel(a.startsAt)}}</span></div><div class="appointment-person"><h2>{{a.professionalName}}</h2><p>{{specialties[a.specialty]}} · {{a.city}}<template v-if="global&&a.clinicName"> · {{a.clinicName}}</template></p><span class="status" :class="{cancelled:a.status==='CANCELLED'}">{{a.status==='CONFIRMED'?'Confirmé':'Annulé'}}</span></div><div class="appointment-actions"><button v-if="a.status==='CONFIRMED'" @click="move(a)">Déplacer <span class="sr-only">le rendez-vous du {{dateLabel(a.startsAt)}} à {{timeLabel(a.startsAt)}} avec {{a.professionalName}}</span></button><button v-if="a.status==='CONFIRMED'" class="danger-link" @click="global&&clinic.focus(a.clinicSlug);cancelId=a.id">Annuler <span class="sr-only">le rendez-vous du {{dateLabel(a.startsAt)}} à {{timeLabel(a.startsAt)}} avec {{a.professionalName}}</span></button><ConvocationButton v-if="a.status==='CONFIRMED'" :appointment-id="a.id" :clinic="global?a.clinicSlug:undefined" :context="`du rendez-vous du ${dateLabel(a.startsAt)} à ${timeLabel(a.startsAt)} avec ${a.professionalName}`" @outdated="refreshAppointments"/><p v-else class="convocation-off">Plus de convocation : rendez-vous annulé.</p><button class="text-button" @click="global&&clinic.focus(a.clinicSlug);showHistory(a.id)">Historique <span class="sr-only">du rendez-vous du {{dateLabel(a.startsAt)}} à {{timeLabel(a.startsAt)}} avec {{a.professionalName}}</span></button></div></article></template>
  </div>
  </main>
  <footer class="footer">
@@ -185,7 +191,7 @@ onBeforeUnmount(()=>document.removeEventListener('keydown',trap));
      <li v-if="!session.user"><button type="button" @click="openAuth">Se connecter</button></li>
     </ul>
    </nav>
-   <div v-if="clinic.current" class="footer-col">
+   <div v-if="clinic.current&&!global" class="footer-col">
     <h2>Votre cabinet</h2>
     <p class="footer-clinic"><span class="clinic-dot" aria-hidden="true"></span><strong>{{clinic.current.name}}</strong></p>
     <p>{{clinic.current.city}} · Horaires affichés en heure de Paris</p>
