@@ -8,7 +8,7 @@ import {specialties,dateLabel,timeLabel} from '../types';
 interface Overview {professionals:number;upcoming:number;members:number;admins:number}
 interface Member {id:number;name:string;email:string;role:'ADMIN'|'MEMBER'}
 interface Booking {id:number;startsAt:string;professionalName:string;specialty:string;patientName:string;status:string}
-interface ClinicStats {slug:string;name:string;city:string;color:string;professionals:number;upcoming:number;members:number;admins:string[]}
+interface ClinicStats {slug:string;name:string;city:string;address:string|null;color:string;professionals:number;upcoming:number;members:number;admins:string[]}
 const emit=defineEmits<{open:[slug:string]}>();
 const clinic=useClinic(),session=useSession();
 const overview=ref<Overview|null>(null),members=ref<Member[]>([]),bookings=ref<Booking[]>([]),all=ref<ClinicStats[]>([]);
@@ -24,14 +24,15 @@ async function load(){
 watch(()=>clinic.current?.slug,()=>void load(),{immediate:true});
 
 // Création d'un cabinet (master seulement). L'identifiant suit le nom tant qu'on ne l'a pas modifié à la main.
-const blank=()=>({name:'',city:'',slug:'',color:'#0873b9',adminEmail:''});
+const blank=()=>({name:'',city:'',address:'',slug:'',color:'#0873b9',adminEmail:''});
+const accounts=ref<{email:string;name:string}[]>([]);
 const creating=ref(false),saving=ref(false),form=ref(blank()),slugTouched=ref(false),formError=ref(''),fieldErrors=ref<Record<string,string>>({}),created=ref('');
 watch(()=>form.value.name,name=>{if(!slugTouched.value)form.value.slug=slugify(name)});
-function openForm(){creating.value=true;created.value='';form.value=blank();slugTouched.value=false;formError.value='';fieldErrors.value={}}
+function openForm(){api<{email:string;name:string}[]>('/master/accounts').then(a=>accounts.value=a).catch(()=>{accounts.value=[]});creating.value=true;created.value='';form.value=blank();slugTouched.value=false;formError.value='';fieldErrors.value={}}
 async function createClinic(){
  if(saving.value)return;saving.value=true;formError.value='';fieldErrors.value={};
  try{
-  const body={...form.value,adminEmail:form.value.adminEmail.trim()||null};
+  const body={...form.value,adminEmail:form.value.adminEmail||null};
   const c=await api<ClinicStats>('/master/clinics',{method:'POST',body:JSON.stringify(body)});
   all.value=[...all.value,c].sort((a,b)=>a.slug.localeCompare(b.slug));
   creating.value=false;created.value=`Le cabinet « ${c.name} » a été créé.`;
@@ -54,7 +55,8 @@ async function createClinic(){
      <div class="field"><label for="clinic-city">Ville</label><input id="clinic-city" v-model="form.city" maxlength="80" placeholder="Marseille" :aria-invalid="!!fieldErrors.city"><p v-if="fieldErrors.city" class="error-text">{{fieldErrors.city}}</p></div>
      <div class="field"><label for="clinic-slug">Identifiant dans l’adresse</label><input id="clinic-slug" v-model="form.slug" maxlength="40" aria-describedby="clinic-slug-hint" :aria-invalid="!!fieldErrors.slug" @input="slugTouched=true"><p id="clinic-slug-hint" class="hint">localhost:8088/c/{{form.slug||'…'}}/</p><p v-if="fieldErrors.slug" class="error-text">{{fieldErrors.slug}}</p></div>
      <div class="field"><label for="clinic-color">Couleur</label><input id="clinic-color" v-model="form.color" type="color" :aria-invalid="!!fieldErrors.color"><p v-if="fieldErrors.color" class="error-text">{{fieldErrors.color}}</p></div>
-     <div class="field wide"><label for="clinic-admin">E-mail de l’admin <span class="hint">(facultatif, compte existant)</span></label><input id="clinic-admin" v-model="form.adminEmail" type="email" autocomplete="off" placeholder="chef@medislot.test" :aria-invalid="!!fieldErrors.adminEmail"><p v-if="fieldErrors.adminEmail" class="error-text">{{fieldErrors.adminEmail}}</p></div>
+     <div class="field wide"><label for="clinic-address">Adresse postale</label><input id="clinic-address" v-model="form.address" maxlength="200" autocomplete="off" placeholder="12 quai du Port, 13002" :aria-invalid="!!fieldErrors.address"><p v-if="fieldErrors.address" class="error-text">{{fieldErrors.address}}</p></div>
+     <div class="field wide"><label for="clinic-admin">Admin du cabinet <span class="hint">(facultatif)</span></label><select id="clinic-admin" v-model="form.adminEmail" :aria-invalid="!!fieldErrors.adminEmail"><option value="">Aucun admin pour l’instant</option><option v-for="a in accounts" :key="a.email" :value="a.email">{{a.name}} — {{a.email}}</option></select><p v-if="fieldErrors.adminEmail" class="error-text">{{fieldErrors.adminEmail}}</p></div>
     </div>
     <p role="alert" class="error-text"><template v-if="formError">{{formError}}</template></p>
     <div class="admin-form-actions"><button type="submit" class="primary" :aria-disabled="saving">{{saving?'Création…':'Créer le cabinet'}}</button><button type="button" class="text-button" @click="creating=false">Annuler</button></div>
@@ -62,7 +64,7 @@ async function createClinic(){
    <div class="admin-clinics">
     <article v-for="c in all" :key="c.slug" class="admin-clinic" :class="{current:c.slug===clinic.current?.slug}" :style="{'--option':safeColor(c.color)}">
      <h3>{{c.name}}</h3>
-     <p class="admin-clinic-city">{{c.city}}</p>
+     <p class="admin-clinic-city">{{c.address?`${c.address}, ${c.city}`:c.city}}</p>
      <dl class="admin-clinic-stats"><div><dd>{{c.professionals}}</dd><dt>praticiens</dt></div><div><dd>{{c.upcoming}}</dd><dt>RDV à venir</dt></div><div><dd>{{c.members}}</dd><dt>membres</dt></div></dl>
      <p class="admin-clinic-admins">{{c.admins.length?c.admins.join(' · '):'Aucun admin'}}</p>
      <button v-if="c.slug!==clinic.current?.slug" class="text-button" @click="emit('open',c.slug)">Ouvrir ce cabinet <span aria-hidden="true">→</span></button>
