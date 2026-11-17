@@ -1,17 +1,24 @@
 package fr.medislot.api;
+import fr.medislot.domain.AppUser;
 import fr.medislot.domain.Clinic;
+import fr.medislot.domain.Membership;
 import fr.medislot.repository.*;
 import fr.medislot.tenant.TenantContext;
 import java.security.Principal;
 import java.util.List;
+import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
 @RestController @RequestMapping("/api")
 public class ClinicController {
  private final ClinicRepository clinics; private final MembershipRepository memberships; private final UserRepository users;
  public ClinicController(ClinicRepository c,MembershipRepository m,UserRepository u){clinics=c;memberships=m;users=u;}
- public record ClinicDto(String slug,String name,String city,String color){static ClinicDto from(Clinic c){return new ClinicDto(c.slug,c.name,c.city,c.color);}}
+ public record ClinicDto(String slug,String name,String city,String color,String role){static ClinicDto from(Clinic c,String role){return new ClinicDto(c.slug,c.name,c.city,c.color,role);}}
  /** Cabinet de la requête (en-tête X-Clinic) : nom et couleur du bandeau, même pour un visiteur anonyme. */
- @GetMapping("/clinic") public ClinicDto current(){return ClinicDto.from(clinics.findById(TenantContext.require()).orElseThrow());}
- /** Cabinets de l'utilisateur connecté, pour le sélecteur. */
- @GetMapping("/me/clinics") public List<ClinicDto> mine(Principal p){return memberships.clinicsOf(users.findByEmail(p.getName()).orElseThrow().id).stream().map(ClinicDto::from).toList();}
+ @GetMapping("/clinic") public ClinicDto current(){return ClinicDto.from(clinics.findById(TenantContext.require()).orElseThrow(),null);}
+ /** Cabinets de l'utilisateur connecté avec son rôle, pour le sélecteur. Un MASTER les voit tous, en admin. */
+ @GetMapping("/me/clinics") public List<ClinicDto> mine(Principal p){
+  AppUser u=users.findByEmail(p.getName()).orElseThrow();
+  if(AppUser.MASTER.equals(u.role))return clinics.findAll(Sort.by("slug")).stream().map(c->ClinicDto.from(c,Membership.ADMIN)).toList();
+  return memberships.clinicsWithRoleOf(u.id).stream().map(r->ClinicDto.from((Clinic)r[0],(String)r[1])).toList();
+ }
 }

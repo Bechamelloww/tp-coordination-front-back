@@ -27,6 +27,8 @@ public class SecurityConfig {
    },UsernamePasswordAuthenticationFilter.class);
   http.authorizeHttpRequests(a->a.dispatcherTypeMatchers(DispatcherType.ASYNC,DispatcherType.ERROR).permitAll()
     .requestMatchers("/api/csrf","/api/clinic","/api/register","/api/login","/api/professionals/**","/api/events","/api/ab/metrics","/api/google/callback","/api/auth/google/**","/actuator/health").permitAll()
+    .requestMatchers("/api/master/**").hasRole("MASTER")
+    .requestMatchers("/api/admin/**").hasRole("CLINIC_ADMIN")
     .requestMatchers("/api/**").authenticated().anyRequest().permitAll())
    .addFilterAfter(new TenantFilter(clinics,memberships,users),AnonymousAuthenticationFilter.class)
    .requestCache(c->c.disable())

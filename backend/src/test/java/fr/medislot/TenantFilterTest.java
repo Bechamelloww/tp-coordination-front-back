@@ -2,6 +2,7 @@ package fr.medislot;
 
 import fr.medislot.domain.AppUser;
 import fr.medislot.domain.Clinic;
+import fr.medislot.domain.Membership;
 import fr.medislot.repository.ClinicRepository;
 import fr.medislot.repository.MembershipRepository;
 import fr.medislot.repository.UserRepository;
@@ -30,6 +31,7 @@ class TenantFilterTest {
  TenantFilter filter = new TenantFilter(clinics, memberships, users);
  MockHttpServletResponse res = new MockHttpServletResponse();
  AtomicReference<Long> seenInChain = new AtomicReference<>();
+ AtomicReference<Boolean> adminInChain = new AtomicReference<>();
 
  @BeforeEach void clinicsAndUser() {
   Clinic a = clinic(1L, "cabinet-a");
@@ -39,7 +41,23 @@ class TenantFilterTest {
   AppUser u = new AppUser();
   u.id = 10L;
   when(users.findByEmail("camille@medislot.test")).thenReturn(Optional.of(u));
-  when(memberships.existsByUserIdAndClinicId(10L, 1L)).thenReturn(true);
+  when(memberships.findByUserIdAndClinicId(10L, 1L)).thenReturn(Optional.of(membership(10L, 1L, Membership.MEMBER)));
+  AppUser admin = new AppUser();
+  admin.id = 20L;
+  when(users.findByEmail("admin@medislot.test")).thenReturn(Optional.of(admin));
+  when(memberships.findByUserIdAndClinicId(20L, 1L)).thenReturn(Optional.of(membership(20L, 1L, Membership.ADMIN)));
+  AppUser master = new AppUser();
+  master.id = 30L;
+  master.role = AppUser.MASTER;
+  when(users.findByEmail("master@medislot.test")).thenReturn(Optional.of(master));
+ }
+
+ private Membership membership(Long user, Long clinic, String role) {
+  Membership m = new Membership();
+  m.userId = user;
+  m.clinicId = clinic;
+  m.role = role;
+  return m;
  }
 
  @AfterEach void cleanUp() {
@@ -65,6 +83,7 @@ class TenantFilterTest {
   filter.doFilter(req, res, new MockFilterChain() {
    @Override public void doFilter(jakarta.servlet.ServletRequest rq, jakarta.servlet.ServletResponse rs) throws java.io.IOException, ServletException {
     seenInChain.set(TenantContext.get());
+    adminInChain.set(SecurityContextHolder.getContext().getAuthentication() != null && SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream().anyMatch(a -> a.getAuthority().equals(TenantFilter.CLINIC_ADMIN)));
     super.doFilter(rq, rs);
    }
   });
@@ -137,9 +156,34 @@ class TenantFilterTest {
  }
 
  @Test void lesAppelsSansCabinetNeSontPasFiltres() throws Exception {
-  for (String path : new String[]{"/api/csrf", "/api/login", "/api/me", "/api/me/clinics", "/api/ab/assignment", "/api/google/callback", "/api/auth/google/start", "/actuator/health"}) {
+  for (String path : new String[]{"/api/csrf", "/api/login", "/api/me", "/api/me/clinics", "/api/master/clinics", "/api/ab/assignment", "/api/google/callback", "/api/auth/google/start", "/actuator/health"}) {
    run(request(path, null));
    assertEquals(200, res.getStatus(), path);
   }
+ }
+ @Test void unMembreSimpleNARecoitPasLeRoleAdmin() throws Exception {
+  signIn("camille@medislot.test");
+  run(request("/api/appointments", "cabinet-a"));
+  assertFalse(adminInChain.get());
+ }
+
+ @Test void lAdminDuCabinetRecoitLeRolePourCetteRequeteSeulement() throws Exception {
+  signIn("admin@medislot.test");
+  run(request("/api/admin/overview", "cabinet-a"));
+  assertTrue(adminInChain.get());
+  assertTrue(SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream().noneMatch(a -> a.getAuthority().equals(TenantFilter.CLINIC_ADMIN)));
+ }
+
+ @Test void lAdminDUnCabinetNEntrePasDansUnAutre() throws Exception {
+  signIn("admin@medislot.test");
+  run(request("/api/admin/overview", "cabinet-b"));
+  assertEquals(404, res.getStatus());
+ }
+
+ @Test void unMasterEntreDansTousLesCabinetsEnAdmin() throws Exception {
+  signIn("master@medislot.test");
+  run(request("/api/admin/overview", "cabinet-b"));
+  assertEquals(2L, seenInChain.get());
+  assertTrue(adminInChain.get());
  }
 }
