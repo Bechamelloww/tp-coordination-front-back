@@ -1,4 +1,17 @@
 #!/usr/bin/env bash
+
+
+# export MEDISLOT_PASSWORD='motdepasse-demo' && \
+# scripts/add-user.sh directeur@medislot.test "Directeur MediSlot" master && \
+# scripts/add-user.sh chef.paris@medislot.test "Sophie Laurent" admin cabinet-a && \
+# scripts/add-user.sh chef.lyon@medislot.test "Karim Benali" admin cabinet-b && \
+# scripts/add-user.sh julie@medislot.test "Julie Moreau" patient cabinet-a && \
+# scripts/add-user.sh thomas@medislot.test "Thomas Petit" patient cabinet-b && \
+# scripts/add-user.sh lea@medislot.test "Léa Garnier" patient cabinet-a cabinet-b && \
+# unset MEDISLOT_PASSWORD && \
+# scripts/add-user.sh --list
+
+
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
