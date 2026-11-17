@@ -31,11 +31,12 @@ watch(()=>clinic.current?.slug,()=>void load(),{immediate:true});
    <h2 id="all-clinics">Tous les cabinets</h2>
    <div class="admin-clinics">
     <article v-for="c in all" :key="c.slug" class="admin-clinic" :class="{current:c.slug===clinic.current?.slug}" :style="{'--option':safeColor(c.color)}">
-     <h3><span class="clinic-dot" aria-hidden="true"></span>{{c.name}}</h3>
-     <p class="subtle-small">{{c.city}} · {{c.admins.length?c.admins.join(', '):'aucun admin'}}</p>
-     <dl><div><dt>Praticiens</dt><dd>{{c.professionals}}</dd></div><div><dt>RDV à venir</dt><dd>{{c.upcoming}}</dd></div><div><dt>Membres</dt><dd>{{c.members}}</dd></div></dl>
+     <h3>{{c.name}}</h3>
+     <p class="admin-clinic-city">{{c.city}}</p>
+     <dl class="admin-clinic-stats"><div><dd>{{c.professionals}}</dd><dt>praticiens</dt></div><div><dd>{{c.upcoming}}</dd><dt>RDV à venir</dt></div><div><dd>{{c.members}}</dd><dt>membres</dt></div></dl>
+     <p class="admin-clinic-admins">{{c.admins.length?c.admins.join(' · '):'Aucun admin'}}</p>
      <button v-if="c.slug!==clinic.current?.slug" class="text-button" @click="emit('open',c.slug)">Ouvrir ce cabinet <span aria-hidden="true">→</span></button>
-     <p v-else class="subtle-small">Cabinet affiché</p>
+     <p v-else class="admin-clinic-here">Cabinet affiché</p>
     </article>
    </div>
   </section>
