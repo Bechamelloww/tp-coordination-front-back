@@ -1,4 +1,6 @@
 package fr.medislot.api;
+import fr.medislot.activity.Activity;
+import fr.medislot.activity.ActivityLog;
 import fr.medislot.tenant.TenantContext;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -12,8 +14,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 @RestController @RequestMapping("/api/admin")
 public class AdminController {
- private final JdbcTemplate jdbc;
- public AdminController(JdbcTemplate jdbc){this.jdbc=jdbc;}
+ private final JdbcTemplate jdbc; private final ActivityLog activityLog;
+ public AdminController(JdbcTemplate jdbc,ActivityLog activityLog){this.jdbc=jdbc;this.activityLog=activityLog;}
  public record Overview(long professionals,long upcoming,long members,long admins){}
  public record MemberDto(Long id,String name,String email,String role){}
  /** Ajout d'un compte existant au cabinet courant ; role MEMBER (défaut) ou ADMIN. */
@@ -38,7 +40,7 @@ public class AdminController {
  }
 
  @PostMapping("/members") @ResponseStatus(HttpStatus.CREATED) @Transactional
- public MemberDto addMember(@Valid @RequestBody NewMember in){
+ public MemberDto addMember(@Valid @RequestBody NewMember in,java.security.Principal principal){
   String email=in.email().strip().toLowerCase(Locale.ROOT);
   String role=in.role()==null?"MEMBER":in.role();
   var user=jdbc.query("select id,name,role from app_user where email=?",(rs,i)->new Object[]{rs.getLong("id"),rs.getString("name"),rs.getString("role")},email)
@@ -46,6 +48,7 @@ public class AdminController {
   if("MASTER".equals(user[2]))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Un compte master a déjà accès à tous les cabinets.");
   int added=jdbc.update("insert into membership(user_id,clinic_id,role) values (?,?,?) on conflict do nothing",user[0],clinic(),role);
   if(added==0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Ce compte est déjà membre du cabinet.");
+  activityLog.recordByEmail(clinic(),principal.getName(),Activity.MEMBER_ADDED,user[1]+" ("+email+") · "+("ADMIN".equals(role)?"Admin":"Patient"));
   return new MemberDto((Long)user[0],(String)user[1],email,role);
  }
 

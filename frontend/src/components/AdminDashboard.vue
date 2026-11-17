@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import {ref,watch} from 'vue';
+import {nextTick,ref,watch} from 'vue';
 import {api,ApiError} from '../api';
 import {useClinic} from '../stores/clinic';
 import {useSession} from '../stores/session';
 import {safeColor,slugify} from '../tenant';
-import {specialties,dateLabel,timeLabel} from '../types';
+import {specialties,dateLabel,timeLabel,type AdminTab} from '../types';
+import ActivityHistory from './ActivityHistory.vue';
+import ClinicStatisticsDashboard from './ClinicStatisticsDashboard.vue';
+import NetworkStatisticsDashboard from './NetworkStatisticsDashboard.vue';
 interface Overview {professionals:number;upcoming:number;members:number;admins:number}
 interface Member {id:number;name:string;email:string;role:'ADMIN'|'MEMBER'}
 interface Booking {id:number;startsAt:string;professionalName:string;specialty:string;patientName:string;status:string}
@@ -61,10 +64,36 @@ async function addMember(){
  finally{addingBusy.value=false}
 }
 watch(()=>clinic.current?.slug,()=>{adding.value=false;added.value=''});
+
+const tabs:{id:AdminTab;label:string}[]=[{id:'manage',label:'Gestion'},{id:'stats',label:'Statistiques'},{id:'history',label:'Historique'}];
+const tab=defineModel<AdminTab>('tab',{default:'manage'});
+const opened=ref(new Set<AdminTab>([tab.value]));
+watch(tab,next=>{opened.value.add(next)});
+const statsPanel=ref<{reload:()=>void}|null>(null),historyPanel=ref<InstanceType<typeof ActivityHistory>|null>(null);
+function selectTab(next:AdminTab,focus=false){
+ tab.value=next;
+ if(focus)void nextTick(()=>document.getElementById(`admin-tab-${next}`)?.focus());
+}
+function onTabKey(e:KeyboardEvent){
+ const index=tabs.findIndex(t=>t.id===tab.value);
+ const moves:Record<string,number>={ArrowRight:(index+1)%tabs.length,ArrowLeft:(index-1+tabs.length)%tabs.length,Home:0,End:tabs.length-1};
+ if(!(e.key in moves))return;
+ e.preventDefault();
+ selectTab(tabs[moves[e.key]].id,true);
+}
+function refresh(){
+ if(tab.value==='history')historyPanel.value?.reload();
+ else if(tab.value==='stats')statsPanel.value?.reload();
+ else if(!loading.value)void load();
+}
 </script>
 <template>
  <div class="admin">
-  <div class="section-title"><div><p class="eyebrow dark">{{session.user?.role==='MASTER'?'ADMINISTRATION GLOBALE':'ADMINISTRATION DU CABINET'}}</p><h1 tabindex="-1">{{clinic.current?.name}}</h1></div><button class="secondary" :aria-disabled="loading" @click="!loading&&load()">Actualiser</button></div>
+  <div class="section-title"><div><p class="eyebrow dark">{{session.user?.role==='MASTER'?'ADMINISTRATION GLOBALE':'ADMINISTRATION DU CABINET'}}</p><h1 tabindex="-1">{{clinic.current?.name}}</h1></div><button class="secondary" :aria-disabled="tab==='manage'&&loading" @click="refresh">Actualiser</button></div>
+  <div class="admin-tabs" role="tablist" aria-label="Sections de l’administration" @keydown="onTabKey">
+   <button v-for="t in tabs" :id="`admin-tab-${t.id}`" :key="t.id" type="button" role="tab" :aria-selected="tab===t.id" :aria-controls="`admin-panel-${t.id}`" :tabindex="tab===t.id?0:-1" @click="selectTab(t.id)">{{t.label}}</button>
+  </div>
+  <div v-show="tab==='manage'" id="admin-panel-manage" role="tabpanel" aria-labelledby="admin-tab-manage">
   <div role="alert"><p v-if="error" class="alert error">{{error}}</p></div>
   <section v-if="all.length" class="admin-block" aria-labelledby="all-clinics">
    <div class="admin-block-head"><h2 id="all-clinics">Tous les cabinets</h2><button v-if="!creating" class="secondary" @click="openForm">Nouveau cabinet</button></div>
@@ -125,5 +154,15 @@ watch(()=>clinic.current?.slug,()=>{adding.value=false;added.value=''});
     <tbody><tr v-for="m in members" :key="m.id"><td>{{m.name}}</td><td>{{m.email}}</td><td><span v-if="m.role==='ADMIN'" class="clinic-role">Admin</span><template v-else>Patient</template></td></tr></tbody>
    </table></div>
   </section>
+  </div>
+  <div v-show="tab==='stats'" id="admin-panel-stats" role="tabpanel" aria-labelledby="admin-tab-stats">
+   <template v-if="opened.has('stats')">
+    <NetworkStatisticsDashboard v-if="isMaster()" ref="statsPanel"/>
+    <ClinicStatisticsDashboard v-else ref="statsPanel"/>
+   </template>
+  </div>
+  <div v-show="tab==='history'" id="admin-panel-history" role="tabpanel" aria-labelledby="admin-tab-history">
+   <ActivityHistory v-if="opened.has('history')" ref="historyPanel" :global="isMaster()" :clinics="all"/>
+  </div>
  </div>
 </template>

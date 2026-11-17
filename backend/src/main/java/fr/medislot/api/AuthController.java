@@ -1,4 +1,6 @@
 package fr.medislot.api;
+import fr.medislot.activity.Activity;
+import fr.medislot.activity.ActivityLog;
 import fr.medislot.domain.AppUser;
 import fr.medislot.domain.Membership;
 import fr.medislot.repository.MembershipRepository;
@@ -13,8 +15,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 @RestController @RequestMapping("/api")
 public class AuthController {
- private final UserRepository users; private final PasswordEncoder encoder; private final MembershipRepository memberships;
- public AuthController(UserRepository users,PasswordEncoder encoder,MembershipRepository memberships){this.users=users;this.encoder=encoder;this.memberships=memberships;}
+ private final UserRepository users; private final PasswordEncoder encoder; private final MembershipRepository memberships; private final ActivityLog activityLog;
+ public AuthController(UserRepository users,PasswordEncoder encoder,MembershipRepository memberships,ActivityLog activityLog){this.users=users;this.encoder=encoder;this.memberships=memberships;this.activityLog=activityLog;}
  public record Identity(Long id,String name,String email,String role){}
  /** RGAA 11.10, 11.11 : chaque contrainte dit la règle en français ; le front affiche le message sous le champ (errors[] du ProblemDetail). */
  public record Registration(
@@ -30,6 +32,7 @@ public class AuthController {
   if(users.existsByEmail(email))throw new ResponseStatusException(HttpStatus.CONFLICT,"Cette adresse est déjà utilisée.");
   AppUser u=new AppUser();u.email=email;u.name=input.name().strip();u.password=encoder.encode(input.password());u.role="PATIENT";users.saveAndFlush(u);
   Membership m=new Membership();m.userId=u.id;m.clinicId=TenantContext.require();memberships.save(m);
+  activityLog.record(m.clinicId,u.id,Activity.ACCOUNT_CREATED,"Mot de passe");
   return new Identity(u.id,u.name,u.email,u.role);
  }
 }

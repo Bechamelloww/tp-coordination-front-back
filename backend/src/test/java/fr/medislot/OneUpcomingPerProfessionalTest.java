@@ -14,7 +14,7 @@ import static org.mockito.Mockito.*;
 /** Règle : un seul rendez-vous à venir par praticien et par patient ; les autres praticiens restent libres. */
 class OneUpcomingPerProfessionalTest {
  UserRepository users=mock(UserRepository.class);SlotRepository slots=mock(SlotRepository.class);AppointmentRepository appointments=mock(AppointmentRepository.class);
- BookingService service=new BookingService(users,slots,appointments,mock(AuditRepository.class),mock(NotificationRepository.class),mock(ApplicationEventPublisher.class),mock(BookingKeys.class));
+ BookingService service=new BookingService(users,slots,appointments,mock(AuditRepository.class),mock(NotificationRepository.class),mock(ApplicationEventPublisher.class),mock(BookingKeys.class),mock(fr.medislot.activity.ActivityLog.class));
  static final String EMAIL="patient@test";
 
  @BeforeEach void data(){

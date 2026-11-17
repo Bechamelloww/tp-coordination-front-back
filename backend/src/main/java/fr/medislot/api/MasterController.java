@@ -1,4 +1,6 @@
 package fr.medislot.api;
+import fr.medislot.activity.Activity;
+import fr.medislot.activity.ActivityLog;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.sql.Array;
@@ -19,8 +21,8 @@ public class MasterController {
    (select count(*) from membership m where m.clinic_id=c.id) members,
    array(select u.email from membership m join app_user u on u.id=m.user_id where m.clinic_id=c.id and m.role='ADMIN' order by u.email) admins
   from clinic c""";
- private final JdbcTemplate jdbc;
- public MasterController(JdbcTemplate jdbc){this.jdbc=jdbc;}
+ private final JdbcTemplate jdbc; private final ActivityLog activityLog;
+ public MasterController(JdbcTemplate jdbc,ActivityLog activityLog){this.jdbc=jdbc;this.activityLog=activityLog;}
  public record ClinicStats(String slug,String name,String city,String address,String color,long professionals,long upcoming,long members,List<String> admins){}
  /** Nouveau cabinet. adminEmail, facultatif : un compte existant qui devient admin du cabinet. */
  public record NewClinic(
@@ -43,7 +45,7 @@ public class MasterController {
  }
 
  @PostMapping("/clinics") @ResponseStatus(HttpStatus.CREATED) @Transactional
- public ClinicStats create(@Valid @RequestBody NewClinic in){
+ public ClinicStats create(@Valid @RequestBody NewClinic in,java.security.Principal principal){
   String slug=in.slug().strip();
   if(Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from clinic where slug=?)",Boolean.class,slug)))
    throw new ResponseStatusException(HttpStatus.CONFLICT,"Cet identifiant est déjà pris par un autre cabinet.");
@@ -56,6 +58,7 @@ public class MasterController {
   Long id=jdbc.queryForObject("insert into clinic(slug,name,city,address,color) values (?,?,?,?,?) returning id",Long.class,
    slug,in.name().strip(),in.city().strip(),in.address().strip(),in.color().toLowerCase(Locale.ROOT));
   if(admin!=null)jdbc.update("insert into membership(user_id,clinic_id,role) values (?,?,'ADMIN')",admin,id);
+  activityLog.recordByEmail(id,principal.getName(),Activity.CLINIC_CREATED,in.name().strip()+" · "+in.city().strip()+(admin!=null?" · admin "+in.adminEmail().strip().toLowerCase(Locale.ROOT):""));
   return jdbc.queryForObject(STATS+" where c.id=?",(rs,i)->stats(rs),id);
  }
 

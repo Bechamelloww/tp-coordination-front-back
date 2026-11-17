@@ -2,6 +2,8 @@ package fr.medislot.security;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import fr.medislot.activity.Activity;
+import fr.medislot.activity.ActivityLog;
 import fr.medislot.domain.Clinic;
 import fr.medislot.domain.Membership;
 import fr.medislot.repository.ClinicRepository;
@@ -33,13 +35,15 @@ public class GoogleLoginController {
  private final ClinicRepository clinics;
  private final MembershipRepository memberships;
  private final UserRepository users;
+ private final ActivityLog activityLog;
 
  public GoogleLoginController(GoogleLoginService loginService, ClinicRepository clinics, MembershipRepository memberships,
-   UserRepository users) {
+   UserRepository users, ActivityLog activityLog) {
   this.loginService = loginService;
   this.clinics = clinics;
   this.memberships = memberships;
   this.users = users;
+  this.activityLog = activityLog;
  }
 
  /** Le front n'affiche le bouton « Continuer avec Google » que si la connexion est configurée. */
@@ -71,7 +75,11 @@ public class GoogleLoginController {
    log.warn("Connexion Google impossible : {}", failure.getClass().getSimpleName());
    outcome = GoogleLoginService.Outcome.ERREUR;
   }
-  String slug = outcome == GoogleLoginService.Outcome.CONNECTE ? joinClinic(request) : null;
+  String slug = null;
+  if (outcome == GoogleLoginService.Outcome.CONNECTE) {
+   activityLog.recordByEmail(null, SecurityContextHolder.getContext().getAuthentication().getName(), Activity.LOGIN, "Google");
+   slug = joinClinic(request);
+  }
   return ResponseEntity.status(HttpStatus.FOUND)
     .location(URI.create((slug == null ? "/" : "/c/" + slug + "/") + "?connexion=" + outcome.queryValue()))
     .cacheControl(CacheControl.noStore())
@@ -93,6 +101,7 @@ public class GoogleLoginController {
    membership.userId = user.id;
    membership.clinicId = clinic.id;
    memberships.save(membership);
+   activityLog.record(clinic.id, user.id, Activity.ACCOUNT_CREATED, "Google");
   }
   return clinic != null && memberships.existsByUserIdAndClinicId(user.id, clinic.id) ? clinic.slug : null;
  }

@@ -1,4 +1,6 @@
 package fr.medislot.application;
+import fr.medislot.activity.Activity;
+import fr.medislot.activity.ActivityLog;
 import fr.medislot.domain.*;
 import fr.medislot.repository.*;
 import io.opentelemetry.api.trace.Span;
@@ -16,8 +18,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class BookingService {
  private final UserRepository users; private final SlotRepository slots; private final AppointmentRepository appointments;
- private final AuditRepository audit; private final NotificationRepository notifications; private final ApplicationEventPublisher events; private final BookingKeys keys;
- public BookingService(UserRepository u,SlotRepository s,AppointmentRepository a,AuditRepository h,NotificationRepository n,ApplicationEventPublisher e,BookingKeys k){users=u;slots=s;appointments=a;audit=h;notifications=n;events=e;keys=k;}
+ private final AuditRepository audit; private final NotificationRepository notifications; private final ApplicationEventPublisher events; private final BookingKeys keys; private final ActivityLog activityLog;
+ public BookingService(UserRepository u,SlotRepository s,AppointmentRepository a,AuditRepository h,NotificationRepository n,ApplicationEventPublisher e,BookingKeys k,ActivityLog l){users=u;slots=s;appointments=a;audit=h;notifications=n;events=e;keys=k;activityLog=l;}
  public Long patient(String email){return users.findByEmail(email).orElseThrow().id;}
  private ResponseStatusException conflict(){return new ResponseStatusException(HttpStatus.CONFLICT,"Ce créneau n’est plus disponible. Choisissez-en un autre.");}
  private Slot lock(Long id){return slots.lockById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Créneau introuvable."));}
@@ -70,5 +72,5 @@ public class BookingService {
   a.slotId=target.id;appointments.saveAndFlush(a);record(a,"RESCHEDULED","Votre rendez-vous a été déplacé.");
   events.publishEvent(new BookingChanged(a.clinicId,a.patientId,List.of(old.professionalId,target.professionalId)));events.publishEvent(new AppointmentChanged(a.clinicId,a.id));return a;
  }
- private void record(Appointment a,String action,String message){AuditEvent h=new AuditEvent();h.appointmentId=a.id;h.actorId=a.patientId;h.action=action;h.createdAt=Instant.now();audit.save(h);Notification n=new Notification();n.patientId=a.patientId;n.message=message;n.createdAt=h.createdAt;notifications.save(n);}
+ private void record(Appointment a,String action,String message){AuditEvent h=new AuditEvent();h.appointmentId=a.id;h.actorId=a.patientId;h.action=action;h.createdAt=Instant.now();audit.save(h);activityLog.recordAppointment(a.id,Activity.valueOf("APPOINTMENT_"+action));Notification n=new Notification();n.patientId=a.patientId;n.message=message;n.createdAt=h.createdAt;notifications.save(n);}
 }
