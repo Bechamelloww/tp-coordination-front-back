@@ -106,7 +106,8 @@ Appels sans cabinet (le filtre ne s'applique pas) : `/api/csrf`, `/api/login`, `
 - Les requêtes d'administration sont en JDBC et filtrent toutes sur `TenantContext.require()`, jamais sur un identifiant reçu.
   `GET /api/master/clinics` est la seule requête inter-cabinets, réservée au `MASTER`.
 - **Création d'un cabinet** (`POST /api/master/clinics`, master seulement) : identifiant (`[a-z0-9-]`, unique, sinon 409), nom, ville,
-  couleur `#rrggbb` et, en option, l'e-mail d'un compte existant qui devient `ADMIN` du cabinet. Tout est fait dans une transaction :
+  adresse postale (`V11__clinic_address.sql`), couleur `#rrggbb` et, en option, l'e-mail d'un compte existant qui devient `ADMIN` du cabinet.
+  Ce compte se choisit dans une liste fournie par `GET /api/master/accounts` (tous les comptes sauf les masters). Tout est fait dans une transaction :
   un admin inconnu renvoie 400 et aucun cabinet n'est créé. `V10__clinic_creation.sql` donne à `medislot_app` le droit `INSERT` sur `clinic`
   (toujours ni `UPDATE` ni `DELETE`). Le nouveau cabinet n'a ni praticien ni créneau. Test : `ClinicCreationIntegrationTest`.
 - `V9__roles.sql` contraint les valeurs (`PATIENT`/`MASTER`, `MEMBER`/`ADMIN`).
