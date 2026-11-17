@@ -19,11 +19,13 @@ public class DemoData implements CommandLineRunner {
   if(demoPassword.isBlank())throw new IllegalStateException("medislot.demo-seed=true exige DEMO_PASSWORD.");
   users=u;professionals=p;slots=s;encoder=e;this.jdbc=jdbc;this.tx=new TransactionTemplate(txManager);this.demoPassword=demoPassword;}
  @Override public void run(String...args){
-  if(!users.existsByEmail("patient@medislot.test")){for(String email:new String[]{"patient@medislot.test","autre@medislot.test"}){AppUser u=new AppUser();u.email=email;u.name=email.startsWith("patient")?"Camille Dupont":"Alex Martin";u.role="PATIENT";u.password=encoder.encode(demoPassword);users.save(u);}}
+  for(String[] a:ACCOUNTS)if(!users.existsByEmail(a[0])){AppUser u=new AppUser();u.email=a[0];u.name=a[1];u.role=a[2];u.password=encoder.encode(demoPassword);users.save(u);}
   seedMemberships();
   seedClinic("cabinet-a",ROWS_A);
   seedClinic("cabinet-b",ROWS_B);
  }
+ static final String[][] ACCOUNTS={{"patient@medislot.test","Camille Dupont","PATIENT"},{"autre@medislot.test","Alex Martin","PATIENT"},
+  {"admin-a@medislot.test","Claire Rousseau","PATIENT"},{"admin-b@medislot.test","Marc Bernard","PATIENT"},{"master@medislot.test","Équipe MediSlot","MASTER"}};
  /** Jours de créneaux tenus à disposition : la fenêtre affichée par GET /api/professionals/{id}/slots (14 jours). */
  static final int DAYS_AHEAD=14;
  static final int[] HOURS={9,10,11,14,15,16};
@@ -51,8 +53,8 @@ public class DemoData implements CommandLineRunner {
  }
  // patient@ est membre des deux cabinets, autre@ seulement de cabinet-a
  private void seedMemberships(){
-  for(String[] m:new String[][]{{"patient@medislot.test","cabinet-a"},{"patient@medislot.test","cabinet-b"},{"autre@medislot.test","cabinet-a"}})
-   jdbc.update("insert into membership(user_id,clinic_id) select u.id,c.id from app_user u,clinic c where u.email=? and c.slug=? on conflict do nothing",m[0],m[1]);
+  for(String[] m:new String[][]{{"patient@medislot.test","cabinet-a","MEMBER"},{"patient@medislot.test","cabinet-b","MEMBER"},{"autre@medislot.test","cabinet-a","MEMBER"},{"admin-a@medislot.test","cabinet-a","ADMIN"},{"admin-b@medislot.test","cabinet-b","ADMIN"}})
+   jdbc.update("insert into membership(user_id,clinic_id,role) select u.id,c.id,? from app_user u,clinic c where u.email=? and c.slug=? on conflict do nothing",m[2],m[0],m[1]);
  }
  private void seedProfessionals(String[][] rows){
   // Positions : mêmes valeurs que la migration V5 (géocodage OpenStreetMap, données fictives).

@@ -14,6 +14,11 @@ class ClinicSchemaTest extends PostgresTestBase {
   assertEquals(List.of("cabinet-a","cabinet-b"),clinicsOf("patient@medislot.test"));
   assertEquals(List.of("cabinet-a"),clinicsOf("autre@medislot.test"));
  }
+ @Test void eachClinicHasItsAdminAndRolesAreChecked(){
+  assertEquals("ADMIN",jdbc.queryForObject("select m.role from membership m join app_user u on u.id=m.user_id where u.email='admin-b@medislot.test' and m.clinic_id=?",String.class,clinic("cabinet-b")));
+  assertThrows(DataIntegrityViolationException.class,()->jdbc.update("update membership set role='OWNER' where clinic_id=?",clinic("cabinet-a")));
+  assertThrows(DataIntegrityViolationException.class,()->jdbc.update("update app_user set role='ROOT' where email='autre@medislot.test'"));
+ }
  @Test void bothClinicsHaveTheirOwnPractitionersAndSlots(){
   for(String slug:List.of("cabinet-a","cabinet-b")){
    assertTrue(jdbc.queryForObject("select count(*) from professional where clinic_id=?",Long.class,clinic(slug))>0,slug);

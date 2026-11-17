@@ -1,8 +1,9 @@
-import {defineStore} from 'pinia';import {ref} from 'vue';import {api} from '../api';
+import {defineStore} from 'pinia';import {ref,computed} from 'vue';import {api} from '../api';
 import {clinicFromPath,clinicFromHost,clinicPath,safeColor,setCurrentClinic,DEFAULT_CLINIC} from '../tenant';
-export interface Clinic {slug:string;name:string;city:string;color:string}
+export interface Clinic {slug:string;name:string;city:string;color:string;role?:'ADMIN'|'MEMBER'|null}
 export const useClinic=defineStore('clinic',()=>{
  const current=ref<Clinic|null>(null),mine=ref<Clinic[]>([]);
+ const isAdmin=computed(()=>mine.value.some(c=>c.slug===current.value?.slug&&c.role==='ADMIN'));
  function paint(c:Clinic){document.documentElement.style.setProperty('--clinic',safeColor(c.color))}
  /** Au chargement : cabinet de l'URL (chemin, puis nom d'hôte), sinon cabinet par défaut. */
  async function init(){
@@ -21,5 +22,5 @@ export const useClinic=defineStore('clinic',()=>{
   return true;
  }
  function reset(){mine.value=[]}
- return {current,mine,init,loadMine,switchTo,reset};
+ return {current,mine,isAdmin,init,loadMine,switchTo,reset};
 });

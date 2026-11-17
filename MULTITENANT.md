@@ -91,6 +91,27 @@ Appels sans cabinet (le filtre ne s'applique pas) : `/api/csrf`, `/api/login`, `
 - `DemoData` : une transaction par cabinet, ouverte **après** avoir posé le cabinet (la session Hibernate garde le cabinet présent à son ouverture).
 - Inscription : le nouveau compte est rattaché au cabinet courant (`membership`).
 
+## Rôles : master et admin de cabinet
+
+| Rôle | Où il est stocké | Ce qu'il ouvre |
+|---|---|---|
+| `MASTER` | `app_user.role` | Tous les cabinets (sans `membership`), en admin ; vue globale `GET /api/master/clinics` |
+| `ADMIN` | `membership.role`, par cabinet | Tableau de bord du cabinet : `GET /api/admin/overview`, `/members`, `/appointments` |
+| `MEMBER` | `membership.role` (défaut) | Rien de plus qu'un patient |
+
+- `TenantFilter` lit le rôle du compte dans le cabinet demandé. Pour un admin du cabinet ou un `MASTER`, il ajoute `ROLE_CLINIC_ADMIN`
+  à l'authentification **de cette requête seulement** (contexte neuf, jamais enregistré en session, rétabli dans le `finally`).
+  Un admin de `cabinet-a` qui envoie `X-Clinic: cabinet-b` reçoit donc 404, comme tout non-membre.
+- `SecurityConfig` : `/api/admin/**` exige `CLINIC_ADMIN`, `/api/master/**` exige `MASTER` (et n'a pas de cabinet).
+- Les requêtes d'administration sont en JDBC et filtrent toutes sur `TenantContext.require()`, jamais sur un identifiant reçu.
+  `GET /api/master/clinics` est la seule requête inter-cabinets, réservée au `MASTER`.
+- `V9__roles.sql` contraint les valeurs (`PATIENT`/`MASTER`, `MEMBER`/`ADMIN`).
+- Comptes de démo (mot de passe `DEMO_PASSWORD`) : `master@medislot.test`, `admin-a@medislot.test`, `admin-b@medislot.test`.
+- Ajout de comptes : `scripts/add-user.sh` (voir l'en-tête du script ; `--list` pour lister comptes et rôles).
+
+Tests : `TenantFilterTest` (rôle admin posé puis retiré, admin d'un autre cabinet en 404, master partout),
+`RolesIntegrationTest` (403 patient, 404 admin hors de son cabinet, vue globale du master), `ClinicSchemaTest` (contraintes de rôle).
+
 ## §3 RLS et cache
 
 *À compléter à l'étape 3.*

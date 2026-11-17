@@ -1,6 +1,8 @@
 package fr.medislot.tenant;
 
+import fr.medislot.domain.AppUser;
 import fr.medislot.domain.Clinic;
+import fr.medislot.domain.Membership;
 import fr.medislot.repository.ClinicRepository;
 import fr.medislot.repository.MembershipRepository;
 import fr.medislot.repository.UserRepository;
@@ -9,10 +11,16 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -23,10 +31,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
  */
 public class TenantFilter extends OncePerRequestFilter {
  public static final String HEADER = "X-Clinic";
+ public static final String CLINIC_ADMIN = "ROLE_CLINIC_ADMIN";
  public static final String PARAM = "clinic";
  static final Pattern SLUG = Pattern.compile("^[a-z0-9]+(-[a-z0-9]+)*$");
  // Appels qui ne dépendent pas d'un cabinet : session, comptes, expériences A/B, retour OAuth Google.
- static final java.util.List<String> NO_CLINIC = java.util.List.of("/api/csrf", "/api/login", "/api/logout", "/api/me", "/api/ab/", "/api/google/", "/api/auth/google/");
+ static final java.util.List<String> NO_CLINIC = java.util.List.of("/api/csrf", "/api/login", "/api/logout", "/api/me", "/api/master/", "/api/ab/", "/api/google/", "/api/auth/google/");
 
  private final ClinicRepository clinics;
  private final MembershipRepository memberships;
@@ -49,24 +58,44 @@ public class TenantFilter extends OncePerRequestFilter {
    problem(res, 400, "Cabinet manquant ou invalide.");
    return;
   }
-  Optional<Clinic> clinic = clinics.findBySlug(slug).filter(this::allowed);
-  if (clinic.isEmpty()) {
+  Optional<Clinic> clinic = clinics.findBySlug(slug);
+  Access access = clinic.map(this::access).orElse(Access.NONE);
+  if (access == Access.NONE) {
    problem(res, 404, "Cabinet introuvable.");
    return;
   }
+  SecurityContext before = SecurityContextHolder.getContext();
   try {
    TenantContext.set(clinic.get().id);
+   if (access == Access.ADMIN) grantClinicAdmin(before.getAuthentication());
    chain.doFilter(req, res);
   } finally {
    TenantContext.clear();
+   SecurityContextHolder.setContext(before);
   }
  }
 
- // Un anonyme voit l'annuaire public ; un utilisateur connecté doit être membre du cabinet.
- private boolean allowed(Clinic clinic) {
+ enum Access { NONE, PUBLIC, MEMBER, ADMIN }
+
+ private Access access(Clinic clinic) {
   Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-  if (auth == null || auth instanceof AnonymousAuthenticationToken) return true;
-  return users.findByEmail(auth.getName()).map(u -> memberships.existsByUserIdAndClinicId(u.id, clinic.id)).orElse(false);
+  if (auth == null || auth instanceof AnonymousAuthenticationToken) return Access.PUBLIC;
+  Optional<AppUser> user = users.findByEmail(auth.getName());
+  if (user.isEmpty()) return Access.NONE;
+  if (AppUser.MASTER.equals(user.get().role)) return Access.ADMIN;
+  return memberships.findByUserIdAndClinicId(user.get().id, clinic.id)
+   .map(m -> Membership.ADMIN.equals(m.role) ? Access.ADMIN : Access.MEMBER)
+   .orElse(Access.NONE);
+ }
+
+ private void grantClinicAdmin(Authentication auth) {
+  List<GrantedAuthority> authorities = new ArrayList<>(auth.getAuthorities());
+  authorities.add(new SimpleGrantedAuthority(CLINIC_ADMIN));
+  UsernamePasswordAuthenticationToken admin = UsernamePasswordAuthenticationToken.authenticated(auth.getPrincipal(), auth.getCredentials(), authorities);
+  admin.setDetails(auth.getDetails());
+  SecurityContext context = SecurityContextHolder.createEmptyContext();
+  context.setAuthentication(admin);
+  SecurityContextHolder.setContext(context);
  }
 
  private void problem(HttpServletResponse res, int status, String message) throws IOException {

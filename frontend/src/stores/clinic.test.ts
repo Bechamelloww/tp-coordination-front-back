@@ -36,4 +36,11 @@ describe('Store du cabinet courant',()=>{
   const clinic=useClinic();await clinic.init();await clinic.loadMine();
   expect(clinic.switchTo('../admin')).toBe(false);
  });
+ it('admin seulement dans les cabinets où le serveur le dit',async()=>{
+  vi.mocked(api).mockResolvedValueOnce(A).mockResolvedValueOnce([{...A,role:'ADMIN'},{...B,role:'MEMBER'}]);
+  const clinic=useClinic();await clinic.init();await clinic.loadMine();
+  expect(clinic.isAdmin).toBe(true);
+  clinic.switchTo('cabinet-b');
+  expect(clinic.isAdmin).toBe(false);
+ });
 });
