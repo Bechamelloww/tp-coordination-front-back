@@ -95,8 +95,8 @@ Appels sans cabinet (le filtre ne s'applique pas) : `/api/csrf`, `/api/login`, `
 
 | Rôle | Où il est stocké | Ce qu'il ouvre |
 |---|---|---|
-| `MASTER` | `app_user.role` | Tous les cabinets (sans `membership`), en admin ; vue globale `GET /api/master/clinics` |
-| `ADMIN` | `membership.role`, par cabinet | Tableau de bord du cabinet : `GET /api/admin/overview`, `/members`, `/appointments` |
+| `MASTER` | `app_user.role` | Tous les cabinets (sans `membership`), en admin ; vue globale `GET /api/master/clinics` ; création d'un cabinet `POST /api/master/clinics` |
+| `ADMIN` | `membership.role`, par cabinet | Tableau de bord du cabinet : `GET /api/admin/overview`, `/members`, `/appointments` ; ajout d'un membre `POST /api/admin/members` |
 | `MEMBER` | `membership.role` (défaut) | Rien de plus qu'un patient |
 
 - `TenantFilter` lit le rôle du compte dans le cabinet demandé. Pour un admin du cabinet ou un `MASTER`, il ajoute `ROLE_CLINIC_ADMIN`
@@ -105,6 +105,15 @@ Appels sans cabinet (le filtre ne s'applique pas) : `/api/csrf`, `/api/login`, `
 - `SecurityConfig` : `/api/admin/**` exige `CLINIC_ADMIN`, `/api/master/**` exige `MASTER` (et n'a pas de cabinet).
 - Les requêtes d'administration sont en JDBC et filtrent toutes sur `TenantContext.require()`, jamais sur un identifiant reçu.
   `GET /api/master/clinics` est la seule requête inter-cabinets, réservée au `MASTER`.
+- **Création d'un cabinet** (`POST /api/master/clinics`, master seulement) : identifiant (`[a-z0-9-]`, unique, sinon 409), nom, ville,
+  adresse postale (`V11__clinic_address.sql`), couleur `#rrggbb` et, en option, l'e-mail d'un compte existant qui devient `ADMIN` du cabinet.
+  Ce compte se choisit dans une liste fournie par `GET /api/master/accounts` (tous les comptes sauf les masters). Tout est fait dans une transaction :
+  un admin inconnu renvoie 400 et aucun cabinet n'est créé. `V10__clinic_creation.sql` donne à `medislot_app` le droit `INSERT` sur `clinic`
+  (toujours ni `UPDATE` ni `DELETE`). Le nouveau cabinet n'a ni praticien ni créneau. Test : `ClinicCreationIntegrationTest`.
+- **Ajout d'un membre** (`POST /api/admin/members`, admin du cabinet ou master) : un compte existant rejoint le cabinet courant comme
+  `MEMBER` ou `ADMIN`. 404 si le compte n'existe pas, 409 s'il est déjà membre, 400 pour un master. Le cabinet vient de `TenantContext`.
+  Dans l'interface, seul le master choisit dans la liste des comptes ; un admin saisit l'e-mail (il ne voit pas les comptes des autres cabinets).
+  Test : `AdminMembersIntegrationTest`.
 - `V9__roles.sql` contraint les valeurs (`PATIENT`/`MASTER`, `MEMBER`/`ADMIN`).
 - Comptes de démo (mot de passe `DEMO_PASSWORD`) : `master@medislot.test`, `admin-a@medislot.test`, `admin-b@medislot.test`.
 - Ajout de comptes : `scripts/add-user.sh` (voir l'en-tête du script ; `--list` pour lister comptes et rôles).
