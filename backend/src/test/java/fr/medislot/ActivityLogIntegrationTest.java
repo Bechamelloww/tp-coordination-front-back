@@ -38,6 +38,8 @@ class ActivityLogIntegrationTest {
  }
 
  @Autowired WebApplicationContext context;
+ // connexion en deux étapes : le code part par e-mail, on le lit dans le message envoyé
+ @org.springframework.test.context.bean.override.mockito.MockitoBean org.springframework.mail.javamail.JavaMailSender mail;
  MockMvc mvc;
  static boolean recorded;
 
@@ -49,7 +51,14 @@ class ActivityLogIntegrationTest {
     .contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"autre@medislot.test\"}")).andExpect(status().isCreated());
   mvc.perform(post("/api/master/clinics").with(user("master@medislot.test").roles("MASTER")).with(csrf()).contentType(MediaType.APPLICATION_JSON)
     .content("{\"slug\":\"cabinet-z\",\"name\":\"Cabinet Zola\",\"city\":\"Nantes\",\"address\":\"3 rue Zola\",\"color\":\"#123456\"}")).andExpect(status().isCreated());
-  mvc.perform(post("/api/login").param("username", "patient@medislot.test").param("password", PASSWORD).with(csrf())).andExpect(status().isNoContent());
+  var session = new org.springframework.mock.web.MockHttpSession();
+  mvc.perform(post("/api/login").session(session).param("username", "patient@medislot.test").param("password", PASSWORD).with(csrf())).andExpect(status().isAccepted());
+  var sent = org.mockito.ArgumentCaptor.forClass(org.springframework.mail.SimpleMailMessage.class);
+  org.mockito.Mockito.verify(mail).send(sent.capture());
+  var code = java.util.regex.Pattern.compile("\\b(\\d{6})\\b").matcher(sent.getValue().getText());
+  if (!code.find()) throw new AssertionError("pas de code dans le message");
+  mvc.perform(post("/api/login/code").session(session).with(csrf()).contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"" + code.group(1) + "\"}"))
+    .andExpect(status().isNoContent());
  }
 
  private ResultActions clinicActivity(String clinic, String email, String query) throws Exception {

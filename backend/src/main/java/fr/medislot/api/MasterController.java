@@ -93,7 +93,7 @@ public class MasterController {
  }
 
  /**
-  * Suppression (archivage, voir V14) : refusée tant qu'il reste des rendez-vous à venir.
+  * Suppression (archivage, voir V15) : refusée tant qu'il reste des rendez-vous à venir.
   * Les créneaux à venir sont verrouillés d'abord : une réservation en cours attend, puis voit le cabinet supprimé.
   * Les adhésions sont retirées : un ancien admin n'est plus « gérant » d'un cabinet qui n'existe plus.
   */

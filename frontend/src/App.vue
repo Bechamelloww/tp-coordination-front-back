@@ -18,6 +18,7 @@ const appointments=ref<Appointment[]>([]),notices=ref<Notice[]>([]),profile=ref<
 const seenNoticeIds=new Set<number>();
 const googleLogin=ref(false),googleBusy=ref(false);
 const authOpen=ref(false),register=ref(false),email=ref(''),password=ref(''),name=ref(''),authError=ref(''),fieldErrors=ref<Record<string,string>>({});
+const codeDestination=ref<string|null>(null),code=ref(''),rememberDevice=ref(false);
 // chosen : confirmation d'un déplacement (PATCH). Une nouvelle réservation passe par le formulaire et la file d'envoi.
 const chosen=ref<{professional:Professional;slot:Slot}|null>(null),moveId=ref<number|null>(null),history=ref<{action:string;createdAt:string}[]|null>(null),cancelId=ref<number|null>(null);
 const pendingChoice=ref<{professional:Professional;slot:Slot}|null>(null),offer=ref<StoredDraft|null>(null);
@@ -99,9 +100,14 @@ function startBooking(professional:Professional,slot:Slot){
 // RGAA 11.10 : erreur par champ (errors[] du ProblemDetail), focus sur le premier champ invalide.
 const authFields=['name','email','password'] as const;
 function describedBy(...ids:(string|false)[]){return ids.filter(Boolean).join(' ')||undefined}
-async function authenticate(){if(busy.value)return;busy.value=true;authError.value='';fieldErrors.value={};try{if(register.value)await api('/register',{method:'POST',body:JSON.stringify({name:name.value,email:email.value,password:password.value})});await session.login(email.value,password.value);if(session.user)await ab.load(session.user.id);authOpen.value=false;password.value='';const c=pendingChoice.value;pendingChoice.value=null;if(c)startBooking(c.professional,c.slot);await refreshAppointments();}
+async function afterLogin(){if(session.user)await ab.load(session.user.id);authOpen.value=false;password.value='';code.value='';codeDestination.value=null;const c=pendingChoice.value;pendingChoice.value=null;if(c)startBooking(c.professional,c.slot);await refreshAppointments();}
+async function authenticate(){if(busy.value)return;busy.value=true;authError.value='';fieldErrors.value={};try{if(register.value)await api('/register',{method:'POST',body:JSON.stringify({name:name.value,email:email.value,password:password.value})});register.value=false;const challenge=await session.login(email.value,password.value);if(challenge){codeDestination.value=challenge.destination;code.value='';rememberDevice.value=false;await nextTick();document.getElementById('auth-code')?.focus();return;}await afterLogin();}
  catch(e){authError.value=message(e);if(e instanceof ApiError)fieldErrors.value=e.fields;await nextTick();const first=authFields.find(f=>fieldErrors.value[f]);if(first)document.getElementById(`auth-${first}`)?.focus();}
  finally{busy.value=false}}
+async function submitCode(){if(busy.value)return;busy.value=true;authError.value='';try{await session.verifyCode(code.value.trim(),rememberDevice.value);await afterLogin();}
+ catch(e){authError.value=message(e);if(e instanceof ApiError&&(e.problem?.code==='CODE_EXPIRE'||e.problem?.code==='CODE_EPUISE')){codeDestination.value=null;password.value='';}else{code.value='';await nextTick();document.getElementById('auth-code')?.focus();}}
+ finally{busy.value=false}}
+function backToPassword(){codeDestination.value=null;code.value='';authError.value='';}
 async function confirm(){if(busy.value||!chosen.value||!moveId.value)return;busy.value=true;error.value='';try{await api(`/appointments/${moveId.value}`,{method:'PATCH',body:JSON.stringify({slotId:chosen.value.slot.id})});success.value='Votre rendez-vous a été déplacé.';chosen.value=null;moveId.value=null;await refreshAppointments();await refreshNotices();await loadSlots();view.value='appointments';}catch(e){error.value=message(e);if(e instanceof ApiError&&e.status===409){chosen.value=null;await loadSlots();}}finally{busy.value=false}}
 async function cancel(){if(busy.value||cancelId.value===null)return;busy.value=true;try{await api(`/appointments/${cancelId.value}/cancel`,{method:'POST'});cancelId.value=null;success.value='Votre rendez-vous a été annulé.';await refreshAppointments();await loadSlots();await refreshNotices();}catch(e){error.value=message(e)}finally{busy.value=false}}
 async function move(a:Appointment){if(global.value)clinic.focus(a.clinicSlug);moveId.value=a.id;autour.value=false;q.value=a.professionalName;city.value='';specialty.value='';view.value='search';await search(true);success.value='Choisissez un nouveau créneau. Votre réservation actuelle reste conservée jusqu’à confirmation.';}
@@ -109,7 +115,7 @@ async function showHistory(id:number){try{history.value=await api(`/appointments
 // Déconnexion volontaire : brouillon et file effacés de l'appareil (une session expirée, elle, garde tout).
 async function logout(){const id=session.user?.id;try{await session.logout();if(id!==undefined)await clearOfflineData(id).catch(()=>{});booking.forget();offer.value=null;ab.clear();personalLive.close();notices.value=[];appointments.value=[];view.value='search';moveId.value=null;}catch(e){error.value=message(e)}}
 async function loginWithGoogle(){if(googleBusy.value)return;googleBusy.value=true;authError.value='';try{await startGoogleLogin(googleBrowser)}catch(e){authError.value=message(e);googleBusy.value=false}}
-function openAuth(){authOpen.value=true;authError.value='';fieldErrors.value={};register.value=false;}
+function openAuth(){authOpen.value=true;authError.value='';fieldErrors.value={};register.value=false;codeDestination.value=null;code.value='';}
 function toggleRegister(){register.value=!register.value;authError.value='';fieldErrors.value={};}
 function myAppointments(){if(!session.user){openAuth();return;}view.value='appointments';refreshAppointments().catch(e=>error.value=message(e));}
 // Bonus : un brouillon relu au démarrage est proposé (« Reprendre » ou « Recommencer ») ; une demande en attente repart seule.
@@ -204,7 +210,18 @@ onBeforeUnmount(()=>document.removeEventListener('keydown',trap));
   </div>
  </footer>
  <div v-if="modalKind" class="overlay" @click.self="closeModal"><section ref="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button class="close" aria-label="Fermer" @click="closeModal">×</button>
-  <template v-if="modalKind==='auth'"><p class="eyebrow dark">VOTRE ESPACE MEDISLOT</p><h2 id="modal-title" tabindex="-1">{{register?'Créer votre compte':'Heureux de vous retrouver'}}</h2><p class="subtle">Connectez-vous pour confirmer et retrouver vos rendez-vous.</p>
+  <template v-if="modalKind==='auth'"><p class="eyebrow dark">VOTRE ESPACE MEDISLOT</p><h2 id="modal-title" tabindex="-1">{{codeDestination?'Vérifiez votre boîte mail':register?'Créer votre compte':'Heureux de vous retrouver'}}</h2><p class="subtle">{{codeDestination?'Une dernière étape pour protéger votre compte.':'Connectez-vous pour confirmer et retrouver vos rendez-vous.'}}</p>
+   <template v-if="codeDestination">
+   <form class="auth-form" novalidate @submit.prevent="submitCode">
+    <p class="form-note">Nous avons envoyé un code à 6 chiffres à <strong>{{codeDestination}}</strong>. Il expire dans 10 minutes.</p>
+    <div class="field"><label for="auth-code">Code reçu par e-mail</label><input id="auth-code" v-model="code" class="code-input" required inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" :aria-invalid="!!authError" aria-describedby="auth-code-error"></div>
+    <label class="remember"><input v-model="rememberDevice" type="checkbox">Se souvenir de cet appareil pendant 30 jours</label>
+    <p id="auth-code-error" role="alert" class="error-text"><template v-if="authError">{{authError}}</template></p>
+    <button type="submit" class="primary" :aria-disabled="busy">{{busy?'Vérification…':'Valider le code'}}</button>
+   </form>
+   <button class="text-button" @click="backToPassword">Revenir à la connexion</button>
+   </template>
+   <template v-else>
    <template v-if="googleLogin"><button type="button" class="google-button" :aria-disabled="googleBusy" @click="loginWithGoogle"><svg aria-hidden="true" viewBox="0 0 48 48" width="20" height="20"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>{{googleBusy?'Redirection vers Google…':'Continuer avec Google'}}</button><p class="auth-separator"><span>ou avec votre e-mail</span></p></template>
    <form class="auth-form" novalidate @submit.prevent="authenticate">
     <p class="form-note">Tous les champs sont obligatoires.</p>
@@ -214,7 +231,7 @@ onBeforeUnmount(()=>document.removeEventListener('keydown',trap));
     <p role="alert" class="error-text"><template v-if="authError">{{authError}}</template></p>
     <button type="submit" class="primary" :aria-disabled="busy">{{busy?'Connexion…':register?'Créer mon compte':'Se connecter'}}</button>
    </form>
-   <button class="text-button" @click="toggleRegister">{{register?'J’ai déjà un compte':'Créer un compte'}}</button></template>
+   <button class="text-button" @click="toggleRegister">{{register?'J’ai déjà un compte':'Créer un compte'}}</button></template></template>
   <template v-else-if="modalKind==='booking'"><BookingForm/></template>
   <template v-else-if="modalKind==='move'&&chosen"><p class="eyebrow dark">DERNIÈRE ÉTAPE</p><h2 id="modal-title" tabindex="-1">Confirmer le déplacement</h2><div class="booking-summary"><h3>{{chosen.professional.name}}</h3><p>{{specialties[chosen.professional.specialty]}}</p><strong>{{dateLabel(chosen.slot.startsAt)}} à {{timeLabel(chosen.slot.startsAt)}}</strong><p>{{chosen.professional.address}}, {{chosen.professional.city}}</p></div><p class="subtle">Le créneau sera réservé après confirmation du serveur. Une autre personne peut encore le sélectionner entre-temps.</p><p class="error-text" role="alert"><template v-if="error">{{error}}</template></p><button class="primary wide" :aria-disabled="busy" @click="confirm">{{busy?'Confirmation…':'Confirmer le déplacement'}}</button></template>
   <template v-else-if="modalKind==='profile'&&profile"><p class="eyebrow dark">VOTRE PRATICIEN</p><h2 id="modal-title" tabindex="-1">{{profile.name}}</h2><p class="specialty">{{specialties[profile.specialty]}}</p><p>{{profile.bio}}</p><h3>Le cabinet</h3><p>{{profile.address}}, {{profile.city}}<template v-if="distanceDe(profile)!=null"> · à {{formatDistance(distanceDe(profile)!)}} de vous</template></p><p v-if="profile.latitude!=null&&profile.longitude!=null" class="carte-lien"><a :href="lienCabinet({latitude:profile.latitude,longitude:profile.longitude})" target="_blank" rel="noopener">Voir le cabinet sur OpenStreetMap <span aria-hidden="true">↗</span><span class="sr-only">(nouvel onglet)</span></a></p><h3>Consultation</h3><p>{{profile.fee}} € · 30 minutes · Au cabinet</p><button class="primary wide" @click="profile=null">Voir les disponibilités</button></template>

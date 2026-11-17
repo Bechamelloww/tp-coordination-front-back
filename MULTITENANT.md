@@ -148,7 +148,7 @@ Tests : `TenantFilterTest` (rôle admin posé puis retiré, admin d'un autre cab
 
 ### Modifier ou supprimer un cabinet (master)
 
-- `PUT /api/master/clinics/{slug}` : nom, ville, adresse, couleur. L'identifiant ne change pas (il est dans les liens `/c/<slug>/`) ; la base l'interdit aussi (droit `UPDATE` par colonne, V14). Les changements vont dans l'historique (`CLINIC_UPDATED`).
+- `PUT /api/master/clinics/{slug}` : nom, ville, adresse, couleur. L'identifiant ne change pas (il est dans les liens `/c/<slug>/`) ; la base l'interdit aussi (droit `UPDATE` par colonne, V15). Les changements vont dans l'historique (`CLINIC_UPDATED`).
 - `DELETE /api/master/clinics/{slug}` : **archivage**, pas d'effacement. `deleted_at` est posé, les adhésions sont retirées, l'historique garde `CLINIC_DELETED`. Refusé (409) tant qu'il reste des rendez-vous à venir.
 - Un cabinet supprimé est invisible partout : `@SQLRestriction` sur l'entité `Clinic` (filtre de cabinet → 404, listes, connexion Google) et `deleted_at is null` dans les requêtes JDBC (annuaire, rendez-vous du patient, statistiques, liste du master). Son identifiant reste pris.
 - Course suppression / réservation : la suppression verrouille les créneaux à venir, la réservation vérifie le cabinet après avoir verrouillé son créneau.
