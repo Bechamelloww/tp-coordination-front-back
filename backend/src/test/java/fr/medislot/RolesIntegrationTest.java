@@ -67,4 +67,9 @@ class RolesIntegrationTest {
   call("/api/me/clinics",null,"admin-a@medislot.test","PATIENT").andExpect(jsonPath("$[*].slug",contains("cabinet-a")));
   call("/api/professionals","cabinet-b","admin-a@medislot.test","PATIENT").andExpect(status().isNotFound());
  }
+
+ @Test void unVisiteurNonConnecteVoitLaListeDesCabinets() throws Exception {
+  mvc.perform(get("/api/clinics")).andExpect(status().isOk()).andExpect(jsonPath("$[*].slug",hasItems("cabinet-a","cabinet-b")))
+   .andExpect(jsonPath("$[0].role").value(nullValue()));
+ }
 }

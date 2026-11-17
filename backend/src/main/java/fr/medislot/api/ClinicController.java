@@ -15,6 +15,8 @@ public class ClinicController {
  public record ClinicDto(String slug,String name,String city,String color,String role){static ClinicDto from(Clinic c,String role){return new ClinicDto(c.slug,c.name,c.city,c.color,role);}}
  /** Cabinet de la requête (en-tête X-Clinic) : nom et couleur du bandeau, même pour un visiteur anonyme. */
  @GetMapping("/clinic") public ClinicDto current(){return ClinicDto.from(clinics.findById(TenantContext.require()).orElseThrow(),null);}
+ /** Tous les cabinets (informations publiques), pour le sélecteur d'un visiteur non connecté. */
+ @GetMapping("/clinics") public List<ClinicDto> all(){return clinics.findAll(Sort.by("slug")).stream().map(c->ClinicDto.from(c,null)).toList();}
  /** Cabinets de l'utilisateur connecté, pour le sélecteur. */
  @GetMapping("/me/clinics") public List<ClinicDto> mine(Principal p){
   AppUser u=users.findByEmail(p.getName()).orElseThrow();
