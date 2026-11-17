@@ -114,7 +114,6 @@ async function onClinicChanged(){
  if(session.user){connectPersonal();refreshNotices().catch(()=>{});refreshAppointments().catch(()=>{})}
  await search(true);
 }
-// Plus admin du cabinet affiché (changement de cabinet, déconnexion) : retour à la recherche.
 watch(()=>clinic.isAdmin,admin=>{if(!admin&&view.value==='admin')view.value='search'});
 function openClinic(slug:string){if(clinic.switchTo(slug))void onClinicChanged()}
 watch(()=>session.user,async user=>{personalLive.close();offer.value=null;

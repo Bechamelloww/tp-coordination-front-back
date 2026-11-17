@@ -51,7 +51,7 @@ public class DemoData implements CommandLineRunner {
   try{tx.executeWithoutResult(status->{seedProfessionals(rows);for(Professional p:professionals.findAll())topUpSlots(p);});}
   finally{TenantContext.clear();}
  }
- // patient@ est membre des deux cabinets, autre@ seulement de cabinet-a ; un admin par cabinet ; master@ n'a pas besoin d'appartenance
+ // patient@ est membre des deux cabinets, autre@ seulement de cabinet-a
  private void seedMemberships(){
   for(String[] m:new String[][]{{"patient@medislot.test","cabinet-a","MEMBER"},{"patient@medislot.test","cabinet-b","MEMBER"},{"autre@medislot.test","cabinet-a","MEMBER"},{"admin-a@medislot.test","cabinet-a","ADMIN"},{"admin-b@medislot.test","cabinet-b","ADMIN"}})
    jdbc.update("insert into membership(user_id,clinic_id,role) select u.id,c.id,? from app_user u,clinic c where u.email=? and c.slug=? on conflict do nothing",m[2],m[0],m[1]);

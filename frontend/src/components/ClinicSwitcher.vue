@@ -11,7 +11,6 @@ const initial=(c:Clinic)=>c.name.replace(/^(Cabinet|Maison de santé) (des |du |
 function show(){open.value=true;void nextTick(()=>root.value?.querySelector<HTMLElement>('[aria-current=true]')?.focus())}
 function close(focus=true){open.value=false;if(focus)toggle.value?.focus()}
 function pick(slug:string){if(slug!==clinic.current?.slug&&clinic.switchTo(slug))emit('switched',slug);close()}
-// Flèches haut et bas entre les cabinets, Échap ferme et rend le focus au bouton.
 function keys(e:KeyboardEvent){
  if(e.key==='Escape'){e.preventDefault();close();return}
  if(e.key!=='ArrowDown'&&e.key!=='ArrowUp')return;

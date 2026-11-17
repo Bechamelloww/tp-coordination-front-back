@@ -1,20 +1,19 @@
 #!/usr/bin/env bash
-# Crée ou met à jour un compte MediSlot dans la base du docker compose.
-#
-#   scripts/add-user.sh <email> "<nom>" patient cabinet-a [cabinet-b ...]
-#   scripts/add-user.sh <email> "<nom>" admin   cabinet-b
-#   scripts/add-user.sh <email> "<nom>" master
-#   scripts/add-user.sh --list
-#
-# Mot de passe : variable MEDISLOT_PASSWORD, sinon demandé au clavier (12 caractères au moins).
-# Hors docker : PSQL="psql -h localhost -p 55432 -U medislot medislot" scripts/add-user.sh ...
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 PSQL=${PSQL:-docker compose exec -T db psql -U medislot -d medislot}
 psql_() { $PSQL -v ON_ERROR_STOP=1 -q "$@"; }
 
-usage() { sed -n '4,7p' "$0" | sed 's/^# *//' >&2; exit 1; }
+usage() {
+  cat >&2 <<'TXT'
+scripts/add-user.sh <email> "<nom>" patient|admin cabinet-a [cabinet-b ...]
+scripts/add-user.sh <email> "<nom>" master
+scripts/add-user.sh --list
+Mot de passe : MEDISLOT_PASSWORD ou saisie au clavier. Hors docker : PSQL="psql -h localhost -p 55432 -U medislot medislot"
+TXT
+  exit 1
+}
 
 if [[ ${1:-} == "--list" ]]; then
   psql_ -c "select u.email, u.name, u.role as compte, coalesce(string_agg(c.slug || ':' || m.role, ', ' order by c.slug), '-') as cabinets
@@ -50,8 +49,6 @@ fi
 bytes=$(printf %s "$password" | wc -c | tr -d ' ')
 (( ${#password} >= 12 && bytes <= 72 )) || { echo "Mot de passe : 12 caractères au moins, 72 octets au plus." >&2; exit 1; }
 
-# Hachage bcrypt par pgcrypto ($2a$, lu tel quel par le BCryptPasswordEncoder de Spring).
-# Les valeurs passent en variables psql (:'...') : pas de concaténation dans le SQL.
 psql_ -v email="$email" -v name="$name" -v pw="$password" -v user_role="$user_role" -v member_role="$member_role" \
   -v slugs="$(IFS=,; echo "${clinics[*]:-}")" <<'SQL'
 set client_min_messages = warning;

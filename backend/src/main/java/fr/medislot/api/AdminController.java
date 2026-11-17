@@ -4,10 +4,6 @@ import java.time.Instant;
 import java.util.List;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
-/**
- * Tableau de bord d'un cabinet, réservé à ses admins (ROLE_CLINIC_ADMIN, posé par TenantFilter) et aux MASTER.
- * Requêtes JDBC : chacune filtre sur le cabinet du contexte, jamais sur un identifiant reçu du client.
- */
 @RestController @RequestMapping("/api/admin")
 public class AdminController {
  private final JdbcTemplate jdbc;
@@ -31,7 +27,6 @@ public class AdminController {
    (rs,i)->new MemberDto(rs.getLong("id"),rs.getString("name"),rs.getString("email"),rs.getString("role")),clinic());
  }
 
- /** Rendez-vous à venir du cabinet, les 50 prochains. */
  @GetMapping("/appointments") public List<AppointmentDto> appointments(){
   return jdbc.query("""
    select a.id,s.starts_at,p.name professional,p.specialty,u.name patient,a.status

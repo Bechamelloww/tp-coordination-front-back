@@ -3,7 +3,6 @@ import {clinicFromPath,clinicFromHost,clinicPath,safeColor,setCurrentClinic,DEFA
 export interface Clinic {slug:string;name:string;city:string;color:string;role?:'ADMIN'|'MEMBER'|null}
 export const useClinic=defineStore('clinic',()=>{
  const current=ref<Clinic|null>(null),mine=ref<Clinic[]>([]);
- /** Admin du cabinet affiché (un MASTER l'est partout : le serveur renvoie ADMIN pour chaque cabinet). */
  const isAdmin=computed(()=>mine.value.some(c=>c.slug===current.value?.slug&&c.role==='ADMIN'));
  function paint(c:Clinic){document.documentElement.style.setProperty('--clinic',safeColor(c.color))}
  /** Au chargement : cabinet de l'URL (chemin, puis nom d'hôte), sinon cabinet par défaut. */

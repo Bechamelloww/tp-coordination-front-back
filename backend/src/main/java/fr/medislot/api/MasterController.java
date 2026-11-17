@@ -4,7 +4,6 @@ import java.sql.SQLException;
 import java.util.List;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
-/** Vue de tous les cabinets, réservée aux comptes MASTER. Seule requête volontairement inter-cabinets. */
 @RestController @RequestMapping("/api/master")
 public class MasterController {
  private final JdbcTemplate jdbc;

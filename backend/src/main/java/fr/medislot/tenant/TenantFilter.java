@@ -27,7 +27,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * Lit le cabinet demandé (en-tête X-Clinic, ou paramètre clinic pour les flux SSE qui ne peuvent pas poser d'en-tête),
  * vérifie que l'utilisateur connecté en est membre, puis le pose dans TenantContext le temps de la requête.
- * Un compte MASTER entre dans tous les cabinets. Un admin du cabinet (ou un MASTER) reçoit ROLE_CLINIC_ADMIN pour cette requête seulement.
  * Pas un @Component : il est inséré dans la chaîne Spring Security (voir SecurityConfig).
  */
 public class TenantFilter extends OncePerRequestFilter {
@@ -78,7 +77,6 @@ public class TenantFilter extends OncePerRequestFilter {
 
  enum Access { NONE, PUBLIC, MEMBER, ADMIN }
 
- // Un anonyme voit l'annuaire public ; un utilisateur connecté doit être membre du cabinet, sauf un MASTER.
  private Access access(Clinic clinic) {
   Authentication auth = SecurityContextHolder.getContext().getAuthentication();
   if (auth == null || auth instanceof AnonymousAuthenticationToken) return Access.PUBLIC;
@@ -90,7 +88,6 @@ public class TenantFilter extends OncePerRequestFilter {
    .orElse(Access.NONE);
  }
 
- // Contexte neuf, jamais enregistré en session : le rôle ne vaut que pour le cabinet de cette requête.
  private void grantClinicAdmin(Authentication auth) {
   List<GrantedAuthority> authorities = new ArrayList<>(auth.getAuthorities());
   authorities.add(new SimpleGrantedAuthority(CLINIC_ADMIN));

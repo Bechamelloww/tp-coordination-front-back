@@ -10,7 +10,6 @@ public interface MembershipRepository extends JpaRepository<Membership,Membershi
  Optional<Membership> findByUserIdAndClinicId(Long userId, Long clinicId);
  @Query("select c from Clinic c, Membership m where m.clinicId=c.id and m.userId=:userId order by c.slug")
  List<Clinic> clinicsOf(Long userId);
- /** Cabinets du compte avec son rôle dans chacun : [Clinic, String]. */
  @Query("select c, m.role from Clinic c, Membership m where m.clinicId=c.id and m.userId=:userId order by c.slug")
  List<Object[]> clinicsWithRoleOf(Long userId);
 }
