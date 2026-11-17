@@ -117,7 +117,7 @@ async function onClinicChanged(){
 watch(()=>clinic.isAdmin,admin=>{if(!admin&&view.value==='admin')view.value='search'});
 function openClinic(slug:string){if(clinic.switchTo(slug))void onClinicChanged()}
 watch(()=>session.user,async user=>{personalLive.close();offer.value=null;
- if(!user){ab.reset();booking.forget();clinic.reset();return}
+ if(!user){ab.reset();booking.forget();clinic.reset();clinic.loadPublic().catch(()=>{});return}
  clinic.loadMine().catch(()=>{});
  ab.load(user.id);refreshNotices().catch(()=>{});refreshAppointments().catch(()=>{});connectPersonal();
  const d=await loadDraft(user.id).catch(()=>null);
@@ -133,6 +133,7 @@ onMounted(async()=>{document.addEventListener('keydown',trap);
  googleLoginEnabled().then(v=>googleLogin.value=v);
  try{await clinic.init()}catch(e){error.value=message(e);return}
  await search();try{await session.load()}catch(e){error.value=message(e)}
+ if(!session.user)clinic.loadPublic().catch(()=>{});
  if(loginReturn&&loginReturn.outcome==='google'&&session.user)success.value=loginReturn.message;else if(loginReturn&&loginReturn.outcome!=='google'){openAuth();authError.value=loginReturn.message;}
  if(googleReturn){success.value=googleReturn.message;if(session.user){view.value='appointments';refreshAppointments().catch(e=>error.value=message(e));}}
  live.connect(withClinic('/api/events'),()=>loadSlots().catch(()=>{}));});
