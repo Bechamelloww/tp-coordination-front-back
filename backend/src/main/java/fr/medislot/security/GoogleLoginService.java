@@ -1,5 +1,6 @@
 package fr.medislot.security;
 
+import fr.medislot.audit.AdminLog;
 import fr.medislot.calendar.GoogleCalendarService;
 import fr.medislot.calendar.GoogleOAuthClient;
 import fr.medislot.calendar.GoogleProperties;
@@ -65,11 +66,13 @@ public class GoogleLoginService {
  private final UserRepository users;
  private final UserDetailsService userDetails;
  private final PasswordEncoder encoder;
+ private final AdminLog journal;
  private final SecurityContextRepository contextRepository = new HttpSessionSecurityContextRepository();
  private final SecureRandom random = new SecureRandom();
 
  public GoogleLoginService(GoogleProperties properties, GoogleOAuthClient oauthClient, UserRepository users,
-   UserDetailsService userDetails, PasswordEncoder encoder) {
+   UserDetailsService userDetails, PasswordEncoder encoder, AdminLog journal) {
+  this.journal = journal;
   this.properties = properties;
   this.oauthClient = oauthClient;
   this.users = users;
@@ -147,7 +150,9 @@ public class GoogleLoginService {
   AppUser existing = sameEmail.get();
   if (existing.googleSub == null && email.equals(currentUserEmail())) {
    existing.googleSub = identity.sub();
-   return Optional.of(users.saveAndFlush(existing));
+   AppUser saved = users.saveAndFlush(existing);
+   journal.recordForUser(existing.id, existing.email, AdminLog.ACCOUNT_GOOGLE_LINKED, existing.name + " a associé son compte Google à son compte MediSlot");
+   return Optional.of(saved);
   }
   return Optional.empty();
  }

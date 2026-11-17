@@ -2,6 +2,7 @@
 import {ref,watch} from 'vue';
 import {api,ApiError} from '../api';
 import {useClinic} from '../stores/clinic';
+import AdminLogs from './AdminLogs.vue';
 import {useSession} from '../stores/session';
 import {safeColor,slugify} from '../tenant';
 import {specialties,dateLabel,timeLabel} from '../types';
@@ -12,9 +13,9 @@ interface ClinicStats {slug:string;name:string;city:string;address:string|null;c
 const emit=defineEmits<{open:[slug:string]}>();
 const clinic=useClinic(),session=useSession();
 const overview=ref<Overview|null>(null),members=ref<Member[]>([]),bookings=ref<Booking[]>([]),all=ref<ClinicStats[]>([]);
-const loading=ref(false),error=ref('');
+const loading=ref(false),error=ref(''),logsVersion=ref(0);
 async function load(){
- loading.value=true;error.value='';
+ loading.value=true;error.value='';logsVersion.value++;
  try{
   [overview.value,members.value,bookings.value]=await Promise.all([api<Overview>('/admin/overview'),api<Member[]>('/admin/members'),api<Booking[]>('/admin/appointments')]);
   all.value=session.user?.role==='MASTER'?await api<ClinicStats[]>('/master/clinics'):[];
@@ -35,7 +36,7 @@ async function createClinic(){
   const body={...form.value,adminEmail:form.value.adminEmail||null};
   const c=await api<ClinicStats>('/master/clinics',{method:'POST',body:JSON.stringify(body)});
   all.value=[...all.value,c].sort((a,b)=>a.slug.localeCompare(b.slug));
-  creating.value=false;created.value=`Le cabinet « ${c.name} » a été créé.`;
+  creating.value=false;logsVersion.value++;created.value=`Le cabinet « ${c.name} » a été créé.`;
   await clinic.loadMine().catch(()=>{});
  }catch(e){formError.value=e instanceof Error?e.message:'Création impossible.';if(e instanceof ApiError)fieldErrors.value=e.fields}
  finally{saving.value=false}
@@ -56,7 +57,7 @@ async function addMember(){
   const m=await api<Member>('/admin/members',{method:'POST',body:JSON.stringify(newMember.value)});
   members.value=[...members.value,m].sort((a,b)=>a.role===b.role?a.name.localeCompare(b.name):a.role==='ADMIN'?-1:1);
   if(overview.value)overview.value={...overview.value,members:overview.value.members+1,admins:overview.value.admins+(m.role==='ADMIN'?1:0)};
-  adding.value=false;added.value=`${m.name} a été ajouté${m.role==='ADMIN'?' comme admin':''}.`;
+  adding.value=false;logsVersion.value++;added.value=`${m.name} a été ajouté${m.role==='ADMIN'?' comme admin':''}.`;
  }catch(e){addError.value=e instanceof Error?e.message:'Ajout impossible.';if(e instanceof ApiError)addErrors.value=e.fields}
  finally{addingBusy.value=false}
 }
@@ -125,5 +126,6 @@ watch(()=>clinic.current?.slug,()=>{adding.value=false;added.value=''});
     <tbody><tr v-for="m in members" :key="m.id"><td>{{m.name}}</td><td>{{m.email}}</td><td><span v-if="m.role==='ADMIN'" class="clinic-role">Admin</span><template v-else>Patient</template></td></tr></tbody>
    </table></div>
   </section>
+  <AdminLogs :master="isMaster()" :clinic-slug="clinic.current?.slug" :version="logsVersion"/>
  </div>
 </template>
