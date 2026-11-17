@@ -1,4 +1,4 @@
-export type ActivityAction='APPOINTMENT_CREATED'|'APPOINTMENT_RESCHEDULED'|'APPOINTMENT_CANCELLED'|'ACCOUNT_CREATED'|'MEMBER_ADDED'|'CLINIC_CREATED'|'LOGIN'|'GOOGLE_CALENDAR_LINKED'|'GOOGLE_CALENDAR_UNLINKED';
+export type ActivityAction='APPOINTMENT_CREATED'|'APPOINTMENT_RESCHEDULED'|'APPOINTMENT_CANCELLED'|'ACCOUNT_CREATED'|'MEMBER_ADDED'|'CLINIC_CREATED'|'CLINIC_UPDATED'|'CLINIC_DELETED'|'LOGIN'|'GOOGLE_CALENDAR_LINKED'|'GOOGLE_CALENDAR_UNLINKED';
 export interface ActivityEntry {id:number;createdAt:string;action:ActivityAction;detail:string|null;actorName:string|null;actorEmail:string|null;clinicSlug:string|null;clinicName:string|null}
 export interface ActivityPage {entries:ActivityEntry[];more:boolean}
 export interface ActivityFilters {clinic:string;action:''|ActivityAction;from:string;to:string;text:string}
@@ -12,12 +12,14 @@ export const activityLabels:Record<ActivityAction,string>={
  ACCOUNT_CREATED:'Inscription',
  MEMBER_ADDED:'Membre ajouté',
  CLINIC_CREATED:'Cabinet créé',
+ CLINIC_UPDATED:'Cabinet modifié',
+ CLINIC_DELETED:'Cabinet supprimé',
  LOGIN:'Connexion',
  GOOGLE_CALENDAR_LINKED:'Google Agenda connecté',
  GOOGLE_CALENDAR_UNLINKED:'Google Agenda déconnecté'
 };
 
-const clinicActions:ActivityAction[]=['APPOINTMENT_CREATED','APPOINTMENT_RESCHEDULED','APPOINTMENT_CANCELLED','ACCOUNT_CREATED','MEMBER_ADDED','CLINIC_CREATED'];
+const clinicActions:ActivityAction[]=['APPOINTMENT_CREATED','APPOINTMENT_RESCHEDULED','APPOINTMENT_CANCELLED','ACCOUNT_CREATED','MEMBER_ADDED','CLINIC_CREATED','CLINIC_UPDATED'];
 
 export function selectableActions(global:boolean):ActivityAction[]{
  return global?Object.keys(activityLabels) as ActivityAction[]:clinicActions;
@@ -26,7 +28,7 @@ export function selectableActions(global:boolean):ActivityAction[]{
 export function activityKind(action:ActivityAction):'appointment'|'cancelled'|'admin'|'account'{
  if(action==='APPOINTMENT_CANCELLED')return 'cancelled';
  if(action.startsWith('APPOINTMENT_'))return 'appointment';
- if(action==='MEMBER_ADDED'||action==='CLINIC_CREATED')return 'admin';
+ if(action==='MEMBER_ADDED'||action.startsWith('CLINIC_'))return 'admin';
  return 'account';
 }
 

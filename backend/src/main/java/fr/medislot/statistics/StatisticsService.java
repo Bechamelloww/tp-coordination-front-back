@@ -29,7 +29,7 @@ public class StatisticsService {
  public StatisticsService(JdbcTemplate jdbc){this.jdbc=jdbc;}
 
  public Optional<ClinicStatistics> forClinic(String slug){
-  return jdbc.query("select id,slug,name,city,color from clinic where slug=?",(rs,i)->forClinic(rs.getLong("id"),rs.getString("slug"),rs.getString("name"),rs.getString("city"),rs.getString("color")),slug)
+  return jdbc.query("select id,slug,name,city,color from clinic where slug=? and deleted_at is null",(rs,i)->forClinic(rs.getLong("id"),rs.getString("slug"),rs.getString("name"),rs.getString("city"),rs.getString("color")),slug)
    .stream().findFirst();
  }
 
@@ -38,12 +38,12 @@ public class StatisticsService {
  }
 
  public NetworkStatistics forNetwork(){
-  Summary summary=jdbc.queryForObject("select "+SUMMARY_COUNTS+",("+UPCOMING_SLOTS+") upcoming_slots from appointment a join slot s on s.id=a.slot_id",(rs,i)->summary(rs));
+  Summary summary=jdbc.queryForObject("select "+SUMMARY_COUNTS+",("+UPCOMING_SLOTS+" and clinic_id in (select id from clinic where deleted_at is null)) upcoming_slots from appointment a join slot s on s.id=a.slot_id join clinic c on c.id=a.clinic_id and c.deleted_at is null",(rs,i)->summary(rs));
   List<ClinicSummary> clinics=jdbc.query("select c.slug,c.name,c.city,c.color,"
    +"(select count(*) from professional p where p.clinic_id=c.id) professionals,"
    +SUMMARY_COUNTS+",("+UPCOMING_SLOTS+" and clinic_id=c.id) upcoming_slots "
    +"from clinic c left join appointment a on a.clinic_id=c.id left join slot s on s.id=a.slot_id "
-   +"group by c.id order by total desc,c.name",
+   +"where c.deleted_at is null group by c.id order by total desc,c.name",
    (rs,i)->new ClinicSummary(rs.getString("slug"),rs.getString("name"),rs.getString("city"),rs.getString("color"),rs.getLong("professionals"),summary(rs)));
   long professionals=clinics.stream().mapToLong(ClinicSummary::professionals).sum();
   return new NetworkStatistics(clinics.size(),professionals,summary,clinics);
