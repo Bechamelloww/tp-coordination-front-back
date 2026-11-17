@@ -2,6 +2,7 @@ package fr.medislot.security;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -25,8 +26,13 @@ public class LoginAttempts {
  }
  public void failed(String email){
   String k=key(email);
-  if(!byEmail.containsKey(k)&&byEmail.size()>=MAX_TRACKED){purge();if(byEmail.size()>=MAX_TRACKED)return;}
+  if(!byEmail.containsKey(k)&&byEmail.size()>=MAX_TRACKED){purge();if(byEmail.size()>=MAX_TRACKED)evictWeakest();}
   byEmail.compute(k,(ignored,f)->f==null||expired(f)?new Failures(1,clock.instant()):new Failures(f.count()+1,f.since()));
+ }
+ private void evictWeakest(){
+  byEmail.entrySet().stream()
+   .min(Comparator.comparingInt((Map.Entry<String,Failures> e)->e.getValue().count()).thenComparing(e->e.getValue().since()))
+   .ifPresent(e->byEmail.remove(e.getKey(),e.getValue()));
  }
  public void succeeded(String email){byEmail.remove(key(email));}
  @Scheduled(fixedDelay=600_000) public void purge(){byEmail.values().removeIf(this::expired);}
