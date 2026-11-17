@@ -19,6 +19,10 @@ public class ClinicController {
  @GetMapping("/me/clinics") public List<ClinicDto> mine(Principal p){
   AppUser u=users.findByEmail(p.getName()).orElseThrow();
   if(AppUser.MASTER.equals(u.role))return clinics.findAll(Sort.by("slug")).stream().map(c->ClinicDto.from(c,Membership.ADMIN)).toList();
-  return memberships.clinicsWithRoleOf(u.id).stream().map(r->ClinicDto.from((Clinic)r[0],(String)r[1])).toList();
+  var roles=new java.util.HashMap<String,String>();
+  for(Object[] r:memberships.clinicsWithRoleOf(u.id))roles.put(((Clinic)r[0]).slug,(String)r[1]);
+  // Gérant : seulement les cabinets qu'il administre. Patient : tous les cabinets, avec son rôle là où il est membre.
+  if(roles.containsValue(Membership.ADMIN))return memberships.clinicsWithRoleOf(u.id).stream().filter(r->Membership.ADMIN.equals(r[1])).map(r->ClinicDto.from((Clinic)r[0],Membership.ADMIN)).toList();
+  return clinics.findAll(Sort.by("slug")).stream().map(c->ClinicDto.from(c,roles.get(c.slug))).toList();
  }
 }
