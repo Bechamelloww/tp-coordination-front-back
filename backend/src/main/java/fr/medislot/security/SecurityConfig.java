@@ -1,4 +1,5 @@
 package fr.medislot.security;
+import fr.medislot.domain.AppUser;
 import fr.medislot.repository.ClinicRepository;
 import fr.medislot.repository.MembershipRepository;
 import fr.medislot.repository.UserRepository;
@@ -6,6 +7,7 @@ import fr.medislot.tenant.TenantFilter;
 import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.*;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.userdetails.*;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -30,7 +32,7 @@ public class SecurityConfig {
    },UsernamePasswordAuthenticationFilter.class);
   http.authorizeHttpRequests(a->a.dispatcherTypeMatchers(DispatcherType.ASYNC,DispatcherType.ERROR).permitAll()
     .requestMatchers("/api/csrf","/api/clinic","/api/register","/api/login","/api/professionals/**","/api/events","/api/ab/metrics","/api/google/callback","/api/auth/google/**","/actuator/health").permitAll()
-    .requestMatchers("/api/master/**").hasRole("MASTER")
+    .requestMatchers("/api/master/**").access((auth,ctx)->new AuthorizationDecision(users.findByEmail(auth.get().getName()).map(u->AppUser.MASTER.equals(u.role)).orElse(false)))
     .requestMatchers("/api/admin/**").hasRole("CLINIC_ADMIN")
     .requestMatchers("/api/**").authenticated().anyRequest().permitAll())
    .addFilterAfter(new TenantFilter(clinics,memberships,users),AnonymousAuthenticationFilter.class)
