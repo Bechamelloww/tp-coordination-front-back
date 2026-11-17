@@ -107,6 +107,13 @@ Appels sans cabinet (le filtre ne s'applique pas) : `/api/csrf`, `/api/login`, `
 | Gérant (au moins une adhésion `ADMIN`) | **Seulement** les cabinets qu'il administre ; 404 ailleurs |
 | `MASTER` | Tous, en admin |
 
+Visiteur et patient sont en **vue tous cabinets** : pas de sélecteur, l'annuaire `GET /api/directory` réunit les praticiens
+de tous les cabinets (données publiques), `GET /api/me/appointments` et `/api/me/notifications` les rendez-vous et notifications
+du patient dans tous ses cabinets. Ce sont des lectures inter-cabinets **volontaires et bornées** (`CrossClinicController`, JDBC) :
+toute écriture (réserver, déplacer, annuler) et la lecture des créneaux se font dans le cabinet du praticien ou du rendez-vous,
+avec `X-Clinic`, donc à travers `TenantFilter` et le filtre Hibernate. Test : `CrossClinicIntegrationTest`.
+Limite : le direct (SSE) des disponibilités ne suit qu'un cabinet à la fois, celui du dernier praticien choisi.
+
 - `TenantFilter` lit le rôle du compte dans le cabinet demandé. Pour un admin du cabinet ou un `MASTER`, il ajoute `ROLE_CLINIC_ADMIN`
   à l'authentification **de cette requête seulement** (contexte neuf, jamais enregistré en session, rétabli dans le `finally`).
   Un admin de `cabinet-a` qui envoie `X-Clinic: cabinet-b` reçoit donc 404, comme tout non-membre.
