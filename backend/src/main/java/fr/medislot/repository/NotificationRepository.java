@@ -1,4 +1,4 @@
 package fr.medislot.repository;
 import fr.medislot.domain.Notification;
 import org.springframework.data.jpa.repository.*;
-public interface NotificationRepository extends JpaRepository<Notification,Long> { java.util.List<Notification> findTop30ByPatientIdOrderByCreatedAtDesc(Long patientId); }
+public interface NotificationRepository extends JpaRepository<Notification,Long> { java.util.List<Notification> findTop30ByPatientIdOrderByCreatedAtDesc(Long patientId); java.util.List<Notification> findByPatientIdAndIdInAndReadAtIsNull(Long patientId,java.util.Collection<Long> ids); }

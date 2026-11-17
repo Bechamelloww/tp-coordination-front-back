@@ -32,7 +32,8 @@ public class AppointmentController {
  }
  public record AppointmentDto(Long id,Long slotId,Long professionalId,String professionalName,String specialty,String address,String city,Instant startsAt,String status){}
  public record HistoryDto(String action,Instant createdAt){}
- public record NotificationDto(Long id,String message,Instant createdAt){}
+ public record NotificationDto(Long id,String message,Instant createdAt,Instant readAt){}
+ public record MarkReadRequest(@NotNull @Size(max=30) java.util.List<@NotNull @Positive Long> ids){}
  private AppointmentDto dto(Appointment a){Slot s=slots.findById(a.slotId).orElseThrow();Professional p=professionals.findById(s.professionalId).orElseThrow();return new AppointmentDto(a.id,s.id,p.id,p.name,p.specialty,p.address,p.city,s.startsAt,a.status);}
  @GetMapping("/appointments") public java.util.List<AppointmentDto> list(Principal p){return appointments.findByPatientIdOrderByCreatedAtDesc(service.patient(p.getName())).stream().map(this::dto).toList();}
  @PostMapping("/appointments") public ResponseEntity<AppointmentDto> book(Principal p,@Valid @RequestBody BookingRequest r,@RequestHeader(name="X-AB-Token",required=false) String abToken,@RequestHeader(name="Idempotency-Key",required=false) java.util.UUID key){var a=service.book(p.getName(),r.slotId(),key,abToken);return ResponseEntity.created(java.net.URI.create("/api/appointments/"+a.id)).body(dto(a));}
@@ -41,5 +42,6 @@ public class AppointmentController {
  @PostMapping("/appointments/{id}/cancel") public AppointmentDto cancel(Principal p,@PathVariable Long id){return dto(service.cancel(p.getName(),id));}
  @PatchMapping("/appointments/{id}") public AppointmentDto move(Principal p,@PathVariable Long id,@Valid @RequestBody BookingRequest r){return dto(service.reschedule(p.getName(),id,r.slotId()));}
  @GetMapping("/appointments/{id}/history") public java.util.List<HistoryDto> history(Principal p,@PathVariable Long id){owned(p,id);return audit.findByAppointmentIdOrderByCreatedAtAsc(id).stream().map(h->new HistoryDto(h.action,h.createdAt)).toList();}
- @GetMapping("/notifications") public java.util.List<NotificationDto> notifications(Principal p){return notifications.findTop30ByPatientIdOrderByCreatedAtDesc(service.patient(p.getName())).stream().map(n->new NotificationDto(n.id,n.message,n.createdAt)).toList();}
+ @GetMapping("/notifications") public java.util.List<NotificationDto> notifications(Principal p){return notifications.findTop30ByPatientIdOrderByCreatedAtDesc(service.patient(p.getName())).stream().map(n->new NotificationDto(n.id,n.message,n.createdAt,n.readAt)).toList();}
+ @PostMapping("/notifications/read") @org.springframework.transaction.annotation.Transactional public ResponseEntity<Void> markRead(Principal p,@Valid @RequestBody MarkReadRequest r){if(!r.ids().isEmpty()){Instant now=Instant.now();var unread=notifications.findByPatientIdAndIdInAndReadAtIsNull(service.patient(p.getName()),r.ids());unread.forEach(n->n.readAt=now);notifications.saveAll(unread);}return ResponseEntity.noContent().build();}
 }
