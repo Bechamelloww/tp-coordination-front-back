@@ -1,5 +1,7 @@
 package fr.medislot.calendar;
 
+import fr.medislot.activity.Activity;
+import fr.medislot.activity.ActivityLog;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import java.net.URI;
@@ -22,9 +24,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class GoogleCalendarController {
  private static final Logger log = LoggerFactory.getLogger(GoogleCalendarController.class);
  private final GoogleCalendarService calendarService;
+ private final ActivityLog activityLog;
 
- public GoogleCalendarController(GoogleCalendarService calendarService) {
+ public GoogleCalendarController(GoogleCalendarService calendarService, ActivityLog activityLog) {
   this.calendarService = calendarService;
+  this.activityLog = activityLog;
  }
 
  @GetMapping("/status")
@@ -52,6 +56,9 @@ public class GoogleCalendarController {
    log.warn("Liaison Google Agenda impossible : {}", failure.getClass().getSimpleName());
    outcome = GoogleCalendarService.AuthorizationOutcome.ERREUR;
   }
+  if (outcome == GoogleCalendarService.AuthorizationOutcome.CONNECTE) {
+   activityLog.recordByEmail(null, email, Activity.GOOGLE_CALENDAR_LINKED, null);
+  }
   return ResponseEntity.status(HttpStatus.FOUND)
     .location(URI.create("/?google=" + outcome.queryValue()))
     .cacheControl(CacheControl.noStore())
@@ -62,6 +69,7 @@ public class GoogleCalendarController {
  @DeleteMapping("/link")
  public ResponseEntity<Void> disconnect(Principal principal) {
   calendarService.disconnect(principal.getName());
+  activityLog.recordByEmail(null, principal.getName(), Activity.GOOGLE_CALENDAR_UNLINKED, null);
   return ResponseEntity.noContent().build();
  }
 }

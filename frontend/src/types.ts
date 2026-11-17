@@ -10,3 +10,4 @@ export const specialties:Record<string,string>={general:'Médecine générale',c
 export const dateLabel=(date:string)=>new Intl.DateTimeFormat('fr-FR',{weekday:'long',day:'numeric',month:'long',timeZone:'Europe/Paris'}).format(new Date(date));
 export const timeLabel=(date:string)=>new Intl.DateTimeFormat('fr-FR',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Paris'}).format(new Date(date));
 export interface GoogleStatus {enabled:boolean;status:'NON_CONNECTE'|'CONNECTE'|'A_RECONNECTER'}
+export type AdminTab='manage'|'stats'|'history';

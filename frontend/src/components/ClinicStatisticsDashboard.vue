@@ -13,10 +13,10 @@ async function load(){
  finally{loading.value=false}
 }
 watch(()=>clinic.current?.slug,()=>void load(),{immediate:true});
+defineExpose({reload:()=>{if(!loading.value)void load()}});
 </script>
 <template>
- <div class="admin">
-  <div class="section-title"><div><p class="eyebrow dark">STATISTIQUES DU CABINET</p><h1 tabindex="-1">{{clinic.current?.name}}</h1></div><button class="secondary" :aria-disabled="loading" @click="!loading&&load()">Actualiser</button></div>
+ <div>
   <div role="alert"><p v-if="error" class="alert error">{{error}}</p></div>
   <ClinicStatisticsPanel v-if="statistics" :statistics="statistics"/>
  </div>

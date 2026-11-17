@@ -41,7 +41,7 @@ class GoogleLoginServiceTest {
  private final UserRepository users = mock(UserRepository.class);
  private final PasswordEncoder encoder = mock(PasswordEncoder.class);
  private final UserDetailsService userDetails = email -> User.withUsername(email).password("x").roles("PATIENT").build();
- private final GoogleLoginService service = new GoogleLoginService(enabled(), oauthClient, users, userDetails, encoder, org.mockito.Mockito.mock(fr.medislot.audit.AdminLog.class));
+ private final GoogleLoginService service = new GoogleLoginService(enabled(), oauthClient, users, userDetails, encoder);
  private final MockHttpSession session = new MockHttpSession();
  private final MockHttpServletRequest request = new MockHttpServletRequest();
  private final MockHttpServletResponse response = new MockHttpServletResponse();

@@ -15,8 +15,8 @@ import org.springframework.http.*;
 import org.springframework.web.server.ResponseStatusException;
 @RestController @RequestMapping("/api")
 public class AppointmentController {
- private final BookingService service; private final AppointmentRepository appointments; private final SlotRepository slots; private final ProfessionalRepository professionals; private final AuditRepository audit; private final NotificationRepository notifications; private final MembershipRepository memberships; private final fr.medislot.audit.AdminLog log;
- public AppointmentController(BookingService s,AppointmentRepository a,SlotRepository t,ProfessionalRepository p,AuditRepository h,NotificationRepository n,MembershipRepository m,fr.medislot.audit.AdminLog l){service=s;appointments=a;slots=t;professionals=p;audit=h;notifications=n;memberships=m;log=l;}
+ private final BookingService service; private final AppointmentRepository appointments; private final SlotRepository slots; private final ProfessionalRepository professionals; private final AuditRepository audit; private final NotificationRepository notifications; private final MembershipRepository memberships;
+ public AppointmentController(BookingService s,AppointmentRepository a,SlotRepository t,ProfessionalRepository p,AuditRepository h,NotificationRepository n,MembershipRepository m){service=s;appointments=a;slots=t;professionals=p;audit=h;notifications=n;memberships=m;}
  public enum ReasonCode{FIRST_VISIT,FOLLOW_UP,PRESCRIPTION,RESULTS}
  public enum ForWhom{SELF,RELATIVE}
  /**
@@ -36,9 +36,7 @@ public class AppointmentController {
  public record MarkReadRequest(@NotNull @Size(max=30) java.util.List<@NotNull @Positive Long> ids){}
  private AppointmentDto dto(Appointment a){Slot s=slots.findById(a.slotId).orElseThrow();Professional p=professionals.findById(s.professionalId).orElseThrow();return new AppointmentDto(a.id,s.id,p.id,p.name,p.specialty,p.address,p.city,s.startsAt,a.status);}
  @GetMapping("/appointments") public java.util.List<AppointmentDto> list(Principal p){return appointments.findByPatientIdOrderByCreatedAtDesc(service.patient(p.getName())).stream().map(this::dto).toList();}
- @PostMapping("/appointments") public ResponseEntity<AppointmentDto> book(Principal p,@Valid @RequestBody BookingRequest r,@RequestHeader(name="X-AB-Token",required=false) String abToken,@RequestHeader(name="Idempotency-Key",required=false) java.util.UUID key){var a=service.book(p.getName(),r.slotId(),key,abToken);
-  if(memberships.join(a.patientId,a.clinicId)==1)log.record(a.clinicId,p.getName(),fr.medislot.audit.AdminLog.MEMBER_JOINED,p.getName()+" a rejoint le cabinet en prenant rendez-vous");
-  return ResponseEntity.created(java.net.URI.create("/api/appointments/"+a.id)).body(dto(a));}
+ @PostMapping("/appointments") public ResponseEntity<AppointmentDto> book(Principal p,@Valid @RequestBody BookingRequest r,@RequestHeader(name="X-AB-Token",required=false) String abToken,@RequestHeader(name="Idempotency-Key",required=false) java.util.UUID key){var a=service.book(p.getName(),r.slotId(),key,abToken);memberships.join(a.patientId,a.clinicId);return ResponseEntity.created(java.net.URI.create("/api/appointments/"+a.id)).body(dto(a));}
  @GetMapping("/appointments/{id}") public AppointmentDto one(Principal p,@PathVariable Long id){return dto(owned(p,id));}
  private Appointment owned(Principal p,Long id){return appointments.findById(id).filter(a->a.patientId.equals(service.patient(p.getName()))).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Rendez-vous introuvable."));}
  @PostMapping("/appointments/{id}/cancel") public AppointmentDto cancel(Principal p,@PathVariable Long id){return dto(service.cancel(p.getName(),id));}

@@ -1,6 +1,6 @@
 package fr.medislot.api;
-import fr.medislot.audit.AdminLog;
-import java.security.Principal;
+import fr.medislot.activity.Activity;
+import fr.medislot.activity.ActivityLog;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.sql.Array;
@@ -21,8 +21,8 @@ public class MasterController {
    (select count(*) from membership m where m.clinic_id=c.id) members,
    array(select u.email from membership m join app_user u on u.id=m.user_id where m.clinic_id=c.id and m.role='ADMIN' order by u.email) admins
   from clinic c""";
- private final JdbcTemplate jdbc; private final AdminLog log;
- public MasterController(JdbcTemplate jdbc,AdminLog log){this.jdbc=jdbc;this.log=log;}
+ private final JdbcTemplate jdbc; private final ActivityLog activityLog;
+ public MasterController(JdbcTemplate jdbc,ActivityLog activityLog){this.jdbc=jdbc;this.activityLog=activityLog;}
  public record ClinicStats(String slug,String name,String city,String address,String color,long professionals,long upcoming,long members,List<String> admins){}
  /** Nouveau cabinet. adminEmail, facultatif : un compte existant qui devient admin du cabinet. */
  public record NewClinic(
@@ -45,29 +45,22 @@ public class MasterController {
  }
 
  @PostMapping("/clinics") @ResponseStatus(HttpStatus.CREATED) @Transactional
- public ClinicStats create(Principal principal,@Valid @RequestBody NewClinic in){
+ public ClinicStats create(@Valid @RequestBody NewClinic in,java.security.Principal principal){
   String slug=in.slug().strip();
   if(Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from clinic where slug=?)",Boolean.class,slug)))
    throw new ResponseStatusException(HttpStatus.CONFLICT,"Cet identifiant est déjà pris par un autre cabinet.");
-  Long admin=null; String email=null, adminName=null;
+  Long admin=null;
   if(in.adminEmail()!=null&&!in.adminEmail().isBlank()){
-   email=in.adminEmail().strip().toLowerCase(Locale.ROOT);
-   var found=jdbc.query("select id,name from app_user where email=?",(rs,i)->new Object[]{rs.getLong(1),rs.getString(2)},email).stream().findFirst()
+   String email=in.adminEmail().strip().toLowerCase(Locale.ROOT);
+   admin=jdbc.query("select id from app_user where email=?",(rs,i)->rs.getLong(1),email).stream().findFirst()
     .orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"Aucun compte avec cette adresse : créez-le d'abord."));
-   admin=(Long)found[0];adminName=(String)found[1];
   }
   Long id=jdbc.queryForObject("insert into clinic(slug,name,city,address,color) values (?,?,?,?,?) returning id",Long.class,
    slug,in.name().strip(),in.city().strip(),in.address().strip(),in.color().toLowerCase(Locale.ROOT));
-  log.record(id,principal.getName(),AdminLog.CLINIC_CREATED,"Cabinet « "+in.name().strip()+" » créé ("+slug+", "+in.city().strip()+")");
-  if(admin!=null){
-   jdbc.update("insert into membership(user_id,clinic_id,role) values (?,?,'ADMIN')",admin,id);
-   log.record(id,principal.getName(),AdminLog.MEMBER_ADDED,adminName+" ("+email+") ajouté comme admin");
-  }
+  if(admin!=null)jdbc.update("insert into membership(user_id,clinic_id,role) values (?,?,'ADMIN')",admin,id);
+  activityLog.recordByEmail(id,principal.getName(),Activity.CLINIC_CREATED,in.name().strip()+" · "+in.city().strip()+(admin!=null?" · admin "+in.adminEmail().strip().toLowerCase(Locale.ROOT):""));
   return jdbc.queryForObject(STATS+" where c.id=?",(rs,i)->stats(rs),id);
  }
-
- /** Journal de tous les cabinets, les plus récentes d'abord. */
- @GetMapping("/logs") public List<AdminLog.Entry> logs(@RequestParam(required=false) Long before){return log.all(before);}
 
  private static ClinicStats stats(java.sql.ResultSet rs) throws SQLException {
   return new ClinicStats(rs.getString("slug"),rs.getString("name"),rs.getString("city"),rs.getString("address"),rs.getString("color"),
