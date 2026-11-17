@@ -23,7 +23,7 @@ public class BookingService {
  public Long patient(String email){return users.findByEmail(email).orElseThrow().id;}
  private ResponseStatusException conflict(){return new ResponseStatusException(HttpStatus.CONFLICT,"Ce créneau n’est plus disponible. Choisissez-en un autre.");}
  private Slot lock(Long id){return slots.lockById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Créneau introuvable."));}
- private void check(Slot s){if(!s.startsAt.isAfter(Instant.now())||appointments.existsBySlotIdAndStatus(s.id,"CONFIRMED"))throw new SlotTakenException(s.professionalId);}
+ private void check(Slot s){if(slots.clinicDeleted(s.clinicId))throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Ce cabinet n’existe plus.");if(!s.startsAt.isAfter(Instant.now())||appointments.existsBySlotIdAndStatus(s.id,"CONFIRMED"))throw new SlotTakenException(s.professionalId);}
  /**
   * Un seul rendez-vous à venir par praticien : refusé s'il en existe déjà un (hors celui qu'on déplace, excludeId).
   * Le verrou du patient, pris après ceux des créneaux (ordre constant, pas d'interblocage), sérialise deux demandes simultanées du même patient.
