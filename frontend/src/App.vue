@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {ref,computed,onMounted,onBeforeUnmount,watch,nextTick,defineAsyncComponent} from 'vue';import {usePosition} from './composables/usePosition';import {distanceKm,autourDe,formatDistance,lienCabinet,RAYON_KM,type Proche} from './geo';import ProfessionalCard from './components/ProfessionalCard.vue';import BookingForm from './components/BookingForm.vue';import ConvocationButton from './components/ConvocationButton.vue';import GoogleCalendarCard from './components/GoogleCalendarCard.vue';import {readGoogleReturn,realBrowser as googleBrowser} from './googleCalendar';import {googleLoginEnabled,startGoogleLogin,readLoginReturn} from './googleLogin';import NetworkBanner from './components/NetworkBanner.vue';import {api,ApiError} from './api';import {useSession} from './stores/session';import {useLive} from './composables/useLive';import {useExperiment} from './stores/experiment';import {useBookingDraft,loadDraft,discardDraft} from './stores/bookingDraft';import {flush} from './offline/flush';import {upcomingByPro} from './offline/bookingRules';import {clearOfflineData} from './offline/clean';import type {StoredDraft} from './offline/types';import {specialties,dateLabel,timeLabel,type Professional,type Slot,type Page,type Appointment,type Notice} from './types';
-import {useClinic} from './stores/clinic';import ClinicSwitcher from './components/ClinicSwitcher.vue';import AdminDashboard from './components/AdminDashboard.vue';import {withClinic} from './tenant';
+import {useClinic} from './stores/clinic';import ClinicSwitcher from './components/ClinicSwitcher.vue';import AdminDashboard from './components/AdminDashboard.vue';import ClinicStatisticsDashboard from './components/ClinicStatisticsDashboard.vue';import NetworkStatisticsDashboard from './components/NetworkStatisticsDashboard.vue';import {withClinic} from './tenant';
 // Carte « Autour de moi » chargée à la demande (Leaflet n'alourdit pas la page d'accueil).
 const NearbyMap=defineAsyncComponent(()=>import('./components/NearbyMap.vue'));
 const localisation=usePosition();
@@ -10,7 +10,7 @@ const autour=ref(false),proches=ref<Proche[]>([]);
 /** Distance à vol d'oiseau depuis la position de la personne, calculée dans le navigateur ; null si inconnue. */
 function distanceDe(p:Professional):number|null{const pos=localisation.position.value;return pos&&p.latitude!=null&&p.longitude!=null?distanceKm(pos,{latitude:p.latitude,longitude:p.longitude}):null}
 const session=useSession(),clinic=useClinic(),live=useLive(),personalLive=useLive(),ab=useExperiment(),booking=useBookingDraft();
-const view=ref<'search'|'appointments'|'admin'>('search'),loading=ref(false),busy=ref(false),error=ref(''),success=ref('');
+const view=ref<'search'|'appointments'|'admin'|'statistics'>('search'),loading=ref(false),busy=ref(false),error=ref(''),success=ref('');
 const q=ref(''),city=ref(''),specialty=ref(''),page=ref(0),total=ref(0),doctors=ref<Professional[]>([]),slots=ref<Record<number,Slot[]>>({});
 const appointments=ref<Appointment[]>([]),notices=ref<Notice[]>([]),showNotices=ref(false),profile=ref<Professional|null>(null);
 const googleLogin=ref(false),googleBusy=ref(false);
@@ -20,7 +20,7 @@ const chosen=ref<{professional:Professional;slot:Slot}|null>(null),moveId=ref<nu
 const pendingChoice=ref<{professional:Professional;slot:Slot}|null>(null),offer=ref<StoredDraft|null>(null);
 
 // RGAA 8.6 et 12.7 : chaque vue a son titre d'onglet ; en changeant de vue, le focus va sur son h1 (tabindex="-1").
-const viewTitles={search:'Trouver un praticien',appointments:'Mes rendez-vous',admin:'Administration'} as const;
+const viewTitles={search:'Trouver un praticien',appointments:'Mes rendez-vous',admin:'Administration',statistics:'Statistiques'} as const;
 function focusHeading(){document.querySelector<HTMLElement>('main h1')?.focus()}
 
 // RGAA 7.1, 7.3, 12.8 : une seule source dit quelle fenêtre est ouverte (null = aucune), dans l'ordre du template.
@@ -114,7 +114,7 @@ async function onClinicChanged(){
  if(session.user){connectPersonal();refreshNotices().catch(()=>{});refreshAppointments().catch(()=>{})}
  await search(true);
 }
-watch(()=>clinic.isAdmin,admin=>{if(!admin&&view.value==='admin')view.value='search'});
+watch(()=>clinic.isAdmin,admin=>{if(!admin&&(view.value==='admin'||view.value==='statistics'))view.value='search'});
 function openClinic(slug:string){if(clinic.switchTo(slug))void onClinicChanged()}
 watch(()=>session.user,async user=>{personalLive.close();offer.value=null;
  if(!user){ab.reset();booking.forget();clinic.reset();return}
@@ -140,7 +140,7 @@ onBeforeUnmount(()=>document.removeEventListener('keydown',trap));
 </script>
 <template>
  <a href="#main" class="skip">Aller au contenu</a>
- <header class="header"><button class="brand" @click="view='search';moveId=null">MediSlot<span class="brand-dot">.</span></button><ClinicSwitcher @switched="onClinicChanged"/><nav aria-label="Navigation principale"><button :aria-current="view==='search'?'page':undefined" @click="view='search'">Trouver un praticien</button><button :aria-current="view==='appointments'?'page':undefined" @click="myAppointments">Mes rendez-vous</button><button v-if="clinic.isAdmin" :aria-current="view==='admin'?'page':undefined" @click="view='admin'">Administration</button><button v-if="session.user" @click="showNotices=!showNotices" :aria-expanded="showNotices">Notifications <span class="count">{{notices.length}}</span></button><button v-if="!session.user" class="login" @click="openAuth">Se connecter</button><button v-else class="login" @click="logout">{{session.user.name.split(' ')[0]}} · Déconnexion</button></nav></header>
+ <header class="header"><button class="brand" @click="view='search';moveId=null">MediSlot<span class="brand-dot">.</span></button><ClinicSwitcher @switched="onClinicChanged"/><nav aria-label="Navigation principale"><button :aria-current="view==='search'?'page':undefined" @click="view='search'">Trouver un praticien</button><button :aria-current="view==='appointments'?'page':undefined" @click="myAppointments">Mes rendez-vous</button><button v-if="clinic.isAdmin" :aria-current="view==='admin'?'page':undefined" @click="view='admin'">Administration</button><button v-if="clinic.isAdmin" :aria-current="view==='statistics'?'page':undefined" @click="view='statistics'">Statistiques</button><button v-if="session.user" @click="showNotices=!showNotices" :aria-expanded="showNotices">Notifications <span class="count">{{notices.length}}</span></button><button v-if="!session.user" class="login" @click="openAuth">Se connecter</button><button v-else class="login" @click="logout">{{session.user.name.split(' ')[0]}} · Déconnexion</button></nav></header>
  <!-- Une seule région principale : elle commence au bandeau de recherche et à son h1 (cible du lien d'évitement). -->
  <main id="main" tabindex="-1">
  <NetworkBanner/>
@@ -161,6 +161,8 @@ onBeforeUnmount(()=>document.removeEventListener('keydown',trap));
    <div v-if="!autour&&total>6" class="pagination"><button :disabled="page===0" @click="page--;search()">Précédent</button><span>Page {{page+1}}</span><button :disabled="(page+1)*6>=total" @click="page++;search()">Suivant</button></div>
   </template>
   <AdminDashboard v-else-if="view==='admin'" @open="openClinic"/>
+  <NetworkStatisticsDashboard v-else-if="view==='statistics'&&session.user?.role==='MASTER'"/>
+  <ClinicStatisticsDashboard v-else-if="view==='statistics'"/>
   <template v-else><div class="section-title"><div><p class="eyebrow dark">VOTRE ESPACE</p><h1 tabindex="-1">Mes rendez-vous</h1></div><button class="primary" @click="view='search'">Prendre rendez-vous</button></div><GoogleCalendarCard/><p v-if="!appointments.length" class="empty">Vous n’avez pas encore de rendez-vous.</p><article v-for="a in appointments" :key="a.id" class="appointment"><div class="appointment-date"><strong>{{dateLabel(a.startsAt)}}</strong><span>{{timeLabel(a.startsAt)}}</span></div><div class="appointment-person"><h2>{{a.professionalName}}</h2><p>{{specialties[a.specialty]}} · {{a.city}}</p><span class="status" :class="{cancelled:a.status==='CANCELLED'}">{{a.status==='CONFIRMED'?'Confirmé':'Annulé'}}</span></div><div class="appointment-actions"><button v-if="a.status==='CONFIRMED'" @click="move(a)">Déplacer <span class="sr-only">le rendez-vous du {{dateLabel(a.startsAt)}} à {{timeLabel(a.startsAt)}} avec {{a.professionalName}}</span></button><button v-if="a.status==='CONFIRMED'" class="danger-link" @click="cancelId=a.id">Annuler <span class="sr-only">le rendez-vous du {{dateLabel(a.startsAt)}} à {{timeLabel(a.startsAt)}} avec {{a.professionalName}}</span></button><ConvocationButton v-if="a.status==='CONFIRMED'" :appointment-id="a.id" :context="`du rendez-vous du ${dateLabel(a.startsAt)} à ${timeLabel(a.startsAt)} avec ${a.professionalName}`" @outdated="refreshAppointments"/><p v-else class="convocation-off">Plus de convocation : rendez-vous annulé.</p><button class="text-button" @click="showHistory(a.id)">Historique <span class="sr-only">du rendez-vous du {{dateLabel(a.startsAt)}} à {{timeLabel(a.startsAt)}} avec {{a.professionalName}}</span></button></div></article></template>
  </div>
  </main>
@@ -176,6 +178,7 @@ onBeforeUnmount(()=>document.removeEventListener('keydown',trap));
      <li><button type="button" @click="view='search'">Trouver un praticien</button></li>
      <li><button type="button" @click="myAppointments">Mes rendez-vous</button></li>
      <li v-if="clinic.isAdmin"><button type="button" @click="view='admin'">Administration du cabinet</button></li>
+     <li v-if="clinic.isAdmin"><button type="button" @click="view='statistics'">Statistiques</button></li>
      <li v-if="!session.user"><button type="button" @click="openAuth">Se connecter</button></li>
     </ul>
    </nav>
