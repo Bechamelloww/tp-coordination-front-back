@@ -2,7 +2,6 @@ package fr.medislot.security;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import fr.medislot.audit.AdminLog;
 import fr.medislot.domain.Clinic;
 import fr.medislot.domain.Membership;
 import fr.medislot.repository.ClinicRepository;
@@ -34,11 +33,9 @@ public class GoogleLoginController {
  private final ClinicRepository clinics;
  private final MembershipRepository memberships;
  private final UserRepository users;
- private final AdminLog journal;
 
  public GoogleLoginController(GoogleLoginService loginService, ClinicRepository clinics, MembershipRepository memberships,
-   UserRepository users, AdminLog journal) {
-  this.journal = journal;
+   UserRepository users) {
   this.loginService = loginService;
   this.clinics = clinics;
   this.memberships = memberships;
@@ -96,7 +93,6 @@ public class GoogleLoginController {
    membership.userId = user.id;
    membership.clinicId = clinic.id;
    memberships.save(membership);
-   journal.record(clinic.id, user.email, AdminLog.ACCOUNT_CREATED, user.name + " (" + user.email + ") a créé son compte avec Google");
   }
   return clinic != null && memberships.existsByUserIdAndClinicId(user.id, clinic.id) ? clinic.slug : null;
  }

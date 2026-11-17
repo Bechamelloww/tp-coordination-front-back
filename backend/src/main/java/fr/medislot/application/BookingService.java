@@ -1,5 +1,4 @@
 package fr.medislot.application;
-import fr.medislot.audit.AdminLog;
 import fr.medislot.domain.*;
 import fr.medislot.repository.*;
 import io.opentelemetry.api.trace.Span;
@@ -17,8 +16,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class BookingService {
  private final UserRepository users; private final SlotRepository slots; private final AppointmentRepository appointments;
- private final AuditRepository audit; private final NotificationRepository notifications; private final ApplicationEventPublisher events; private final BookingKeys keys; private final AdminLog log;
- public BookingService(UserRepository u,SlotRepository s,AppointmentRepository a,AuditRepository h,NotificationRepository n,ApplicationEventPublisher e,BookingKeys k,AdminLog l){users=u;slots=s;appointments=a;audit=h;notifications=n;events=e;keys=k;log=l;}
+ private final AuditRepository audit; private final NotificationRepository notifications; private final ApplicationEventPublisher events; private final BookingKeys keys;
+ public BookingService(UserRepository u,SlotRepository s,AppointmentRepository a,AuditRepository h,NotificationRepository n,ApplicationEventPublisher e,BookingKeys k){users=u;slots=s;appointments=a;audit=h;notifications=n;events=e;keys=k;}
  public Long patient(String email){return users.findByEmail(email).orElseThrow().id;}
  private ResponseStatusException conflict(){return new ResponseStatusException(HttpStatus.CONFLICT,"Ce créneau n’est plus disponible. Choisissez-en un autre.");}
  private Slot lock(Long id){return slots.lockById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Créneau introuvable."));}
@@ -56,19 +55,19 @@ public class BookingService {
   Appointment a=new Appointment();a.patientId=patient;a.slotId=s.id;a.status="CONFIRMED";a.createdAt=Instant.now();appointments.saveAndFlush(a);
   Span.current().setAttribute("medislot.appointment.id",a.id);
   if(key!=null)keys.save(patient,key,s.id,a.id);
-  record(a,"CREATED","Votre rendez-vous est confirmé.");log.appointment(AdminLog.APPOINTMENT_BOOKED,a.id,null);events.publishEvent(new AppointmentBooked(patient,a.id,abToken));events.publishEvent(new BookingChanged(s.clinicId,patient,List.of(s.professionalId)));events.publishEvent(new AppointmentChanged(a.clinicId,a.id));return a;
+  record(a,"CREATED","Votre rendez-vous est confirmé.");events.publishEvent(new AppointmentBooked(patient,a.id,abToken));events.publishEvent(new BookingChanged(s.clinicId,patient,List.of(s.professionalId)));events.publishEvent(new AppointmentChanged(a.clinicId,a.id));return a;
  }
  @Transactional public Appointment cancel(String email,Long id){
   Appointment a=owned(id,patient(email));Slot s=lock(a.slotId);
   if(a.status.equals("CANCELLED"))return a;
-  a.status="CANCELLED";appointments.saveAndFlush(a);record(a,"CANCELLED","Votre rendez-vous a été annulé.");log.appointment(AdminLog.APPOINTMENT_CANCELLED,a.id,null);events.publishEvent(new BookingChanged(s.clinicId,a.patientId,List.of(s.professionalId)));events.publishEvent(new AppointmentChanged(a.clinicId,a.id));return a;
+  a.status="CANCELLED";appointments.saveAndFlush(a);record(a,"CANCELLED","Votre rendez-vous a été annulé.");events.publishEvent(new BookingChanged(s.clinicId,a.patientId,List.of(s.professionalId)));events.publishEvent(new AppointmentChanged(a.clinicId,a.id));return a;
  }
  @Transactional public Appointment reschedule(String email,Long id,Long slotId){
   Appointment a=owned(id,patient(email));if(!a.status.equals("CONFIRMED"))throw conflict();
   if(a.slotId.equals(slotId))return a;
   Long oldId=a.slotId; Slot first=lock(Math.min(oldId,slotId)),second=lock(Math.max(oldId,slotId));
   Slot target=first.id.equals(slotId)?first:second;Slot old=first.id.equals(oldId)?first:second;check(target);oneUpcomingPerProfessional(a.patientId,target,a.id);
-  a.slotId=target.id;appointments.saveAndFlush(a);record(a,"RESCHEDULED","Votre rendez-vous a été déplacé.");log.appointment(AdminLog.APPOINTMENT_MOVED,a.id,oldId);
+  a.slotId=target.id;appointments.saveAndFlush(a);record(a,"RESCHEDULED","Votre rendez-vous a été déplacé.");
   events.publishEvent(new BookingChanged(a.clinicId,a.patientId,List.of(old.professionalId,target.professionalId)));events.publishEvent(new AppointmentChanged(a.clinicId,a.id));return a;
  }
  private void record(Appointment a,String action,String message){AuditEvent h=new AuditEvent();h.appointmentId=a.id;h.actorId=a.patientId;h.action=action;h.createdAt=Instant.now();audit.save(h);Notification n=new Notification();n.patientId=a.patientId;n.message=message;n.createdAt=h.createdAt;notifications.save(n);}

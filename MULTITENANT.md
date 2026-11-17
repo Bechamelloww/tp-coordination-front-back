@@ -136,26 +136,6 @@ Limite : le direct (SSE) des disponibilités ne suit qu'un cabinet à la fois, c
 Tests : `TenantFilterTest` (rôle admin posé puis retiré, admin d'un autre cabinet en 404, master partout),
 `RolesIntegrationTest` (403 patient, 404 admin hors de son cabinet, vue globale du master), `ClinicSchemaTest` (contraintes de rôle).
 
-### Journal d'activité du cabinet
-
-Chaque cabinet a son journal (table `admin_log`, migration V13). Une ligne = qui, quand, quoi, en une phrase :
-
-| Action | Exemple de détail |
-|---|---|
-| `APPOINTMENT_BOOKED` | Camille Dupont a pris rendez-vous avec Dr Sarah Martin (Médecine générale) pour le mardi 18 novembre 2026 à 10h00 |
-| `APPOINTMENT_MOVED` | … a déplacé son rendez-vous avec … pour le … : nouveau rendez-vous avec … pour le … |
-| `APPOINTMENT_CANCELLED` | … a annulé son rendez-vous avec … pour le … |
-| `ACCOUNT_CREATED` | Jeanne Durand (jeanne@…) a créé son compte (ou « avec Google ») |
-| `ACCOUNT_GOOGLE_LINKED` | … a associé son compte Google à son compte MediSlot (dans chaque cabinet du compte) |
-| `MEMBER_JOINED` | … a rejoint le cabinet en prenant rendez-vous |
-| `MEMBER_ADDED` | Alex Martin (autre@…) ajouté comme patient / comme admin |
-| `CLINIC_CREATED` | Cabinet « … » créé (slug, ville) |
-
-- **Lecture** : `GET /api/admin/logs` (admins du cabinet courant et master, comme tout `/api/admin/**`) ; `GET /api/master/logs` (master, tous cabinets). 50 lignes par page, `?before=<id>` pour la suite. Personne d'autre : 401 sans session, 403 pour un patient, 404 pour l'admin d'un autre cabinet.
-- **Écriture** : dans la transaction de l'action ; une action refusée (409, 404, 400) ne laisse pas de ligne.
-- **Ajout seul** : un trigger refuse `UPDATE` et `DELETE`, et `medislot_app` n'a pas ces droits.
-- Le journal démarre à la migration : les actions antérieures n'y sont pas.
-
 ## §3 RLS et cache
 
 *À compléter à l'étape 3.*
