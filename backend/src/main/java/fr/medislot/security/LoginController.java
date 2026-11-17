@@ -46,7 +46,6 @@ public class LoginController {
 
  public LoginController(UserDetailsService userDetails, PasswordEncoder encoder, LoginAttempts attempts, LoginCodes codes,
    TrustedDevices devices, UserRepository users, ActivityLog activityLog) {
-  this.activityLog = activityLog;
   this.passwords = new DaoAuthenticationProvider(userDetails);
   this.passwords.setPasswordEncoder(encoder);
   this.userDetails = userDetails;
@@ -54,6 +53,7 @@ public class LoginController {
   this.codes = codes;
   this.devices = devices;
   this.users = users;
+  this.activityLog = activityLog;
  }
 
  @PostMapping
@@ -74,7 +74,7 @@ public class LoginController {
   }
   attempts.succeeded(authenticated.getName());
   if (devices.trusted(userId(authenticated.getName()), request)) {
-   signIn(authenticated.getName(), request, response, "Mot de passe · appareil reconnu");
+   signIn(authenticated.getName(), "Mot de passe, appareil reconnu", request, response);
    return ResponseEntity.noContent().build();
   }
   try {
@@ -92,7 +92,7 @@ public class LoginController {
   LoginCodes.Result result = codes.verify(request.getSession(false), code);
   return switch (result.outcome()) {
    case VALID -> {
-    signIn(result.email(), request, response, "Mot de passe + code");
+    signIn(result.email(), "Mot de passe et code e-mail", request, response);
     if (Boolean.TRUE.equals(body.remember())) response.addHeader(HttpHeaders.SET_COOKIE, devices.remember(userId(result.email())).toString());
     yield ResponseEntity.noContent().build();
    }
@@ -106,8 +106,8 @@ public class LoginController {
   return users.findByEmail(email).orElseThrow().id;
  }
 
- /** Connexion par mot de passe réussie : session ouverte et ligne « Connexion » dans l'historique. */
- private void signIn(String email, HttpServletRequest request, HttpServletResponse response, String how) {
+ private void signIn(String email, String method, HttpServletRequest request, HttpServletResponse response) {
+  activityLog.recordByEmail(null, email, Activity.LOGIN, method);
   UserDetails principal = userDetails.loadUserByUsername(email);
   request.changeSessionId();
   csrfTokens.saveToken(null, request, response);
@@ -115,7 +115,6 @@ public class LoginController {
   context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(principal, null, principal.getAuthorities()));
   SecurityContextHolder.setContext(context);
   contextRepository.saveContext(context, request, response);
-  activityLog.recordByEmail(null, principal.getUsername(), Activity.LOGIN, how);
  }
 
  private static ResponseEntity<ProblemDetail> unauthorized(String title, String code) {
