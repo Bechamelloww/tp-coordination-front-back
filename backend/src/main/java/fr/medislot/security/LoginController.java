@@ -1,5 +1,7 @@
 package fr.medislot.security;
 
+import fr.medislot.activity.Activity;
+import fr.medislot.activity.ActivityLog;
 import fr.medislot.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -38,11 +40,12 @@ public class LoginController {
  private final LoginCodes codes;
  private final TrustedDevices devices;
  private final UserRepository users;
+ private final ActivityLog activityLog;
  private final SecurityContextRepository contextRepository = new HttpSessionSecurityContextRepository();
  private final HttpSessionCsrfTokenRepository csrfTokens = new HttpSessionCsrfTokenRepository();
 
  public LoginController(UserDetailsService userDetails, PasswordEncoder encoder, LoginAttempts attempts, LoginCodes codes,
-   TrustedDevices devices, UserRepository users) {
+   TrustedDevices devices, UserRepository users, ActivityLog activityLog) {
   this.passwords = new DaoAuthenticationProvider(userDetails);
   this.passwords.setPasswordEncoder(encoder);
   this.userDetails = userDetails;
@@ -50,6 +53,7 @@ public class LoginController {
   this.codes = codes;
   this.devices = devices;
   this.users = users;
+  this.activityLog = activityLog;
  }
 
  @PostMapping
@@ -70,7 +74,7 @@ public class LoginController {
   }
   attempts.succeeded(authenticated.getName());
   if (devices.trusted(userId(authenticated.getName()), request)) {
-   signIn(authenticated.getName(), request, response);
+   signIn(authenticated.getName(), "Mot de passe, appareil reconnu", request, response);
    return ResponseEntity.noContent().build();
   }
   try {
@@ -88,7 +92,7 @@ public class LoginController {
   LoginCodes.Result result = codes.verify(request.getSession(false), code);
   return switch (result.outcome()) {
    case VALID -> {
-    signIn(result.email(), request, response);
+    signIn(result.email(), "Mot de passe et code e-mail", request, response);
     if (Boolean.TRUE.equals(body.remember())) response.addHeader(HttpHeaders.SET_COOKIE, devices.remember(userId(result.email())).toString());
     yield ResponseEntity.noContent().build();
    }
@@ -102,7 +106,8 @@ public class LoginController {
   return users.findByEmail(email).orElseThrow().id;
  }
 
- private void signIn(String email, HttpServletRequest request, HttpServletResponse response) {
+ private void signIn(String email, String method, HttpServletRequest request, HttpServletResponse response) {
+  activityLog.recordByEmail(null, email, Activity.LOGIN, method);
   UserDetails principal = userDetails.loadUserByUsername(email);
   request.changeSessionId();
   csrfTokens.saveToken(null, request, response);

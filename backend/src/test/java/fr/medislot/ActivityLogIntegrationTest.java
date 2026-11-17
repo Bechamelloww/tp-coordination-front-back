@@ -8,7 +8,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import static org.mockito.Mockito.verify;
+
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.mockito.ArgumentCaptor;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mock.web.MockHttpSession;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +47,7 @@ class ActivityLogIntegrationTest {
  }
 
  @Autowired WebApplicationContext context;
+ @MockitoBean JavaMailSender mail;
  MockMvc mvc;
  static boolean recorded;
 
@@ -49,7 +59,14 @@ class ActivityLogIntegrationTest {
     .contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"autre@medislot.test\"}")).andExpect(status().isCreated());
   mvc.perform(post("/api/master/clinics").with(user("master@medislot.test").roles("MASTER")).with(csrf()).contentType(MediaType.APPLICATION_JSON)
     .content("{\"slug\":\"cabinet-z\",\"name\":\"Cabinet Zola\",\"city\":\"Nantes\",\"address\":\"3 rue Zola\",\"color\":\"#123456\"}")).andExpect(status().isCreated());
-  mvc.perform(post("/api/login").param("username", "patient@medislot.test").param("password", PASSWORD).with(csrf())).andExpect(status().isNoContent());
+  MockHttpSession session = new MockHttpSession();
+  mvc.perform(post("/api/login").session(session).param("username", "patient@medislot.test").param("password", PASSWORD).with(csrf())).andExpect(status().isAccepted());
+  ArgumentCaptor<SimpleMailMessage> sent = ArgumentCaptor.forClass(SimpleMailMessage.class);
+  verify(mail).send(sent.capture());
+  Matcher code = Pattern.compile("\\b(\\d{6})\\b").matcher(sent.getValue().getText());
+  if (!code.find()) throw new AssertionError("pas de code dans le message");
+  mvc.perform(post("/api/login/code").session(session).with(csrf()).contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"" + code.group(1) + "\"}"))
+    .andExpect(status().isNoContent());
  }
 
  private ResultActions clinicActivity(String clinic, String email, String query) throws Exception {

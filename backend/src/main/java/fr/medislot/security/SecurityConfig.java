@@ -1,6 +1,4 @@
 package fr.medislot.security;
-import fr.medislot.activity.Activity;
-import fr.medislot.activity.ActivityLog;
 import fr.medislot.domain.AppUser;
 import fr.medislot.repository.ClinicRepository;
 import fr.medislot.repository.MembershipRepository;
@@ -19,7 +17,7 @@ import org.springframework.security.web.authentication.AnonymousAuthenticationFi
 public class SecurityConfig {
  @Bean PasswordEncoder encoder(){return new BCryptPasswordEncoder();}
  @Bean UserDetailsService users(UserRepository users){return email -> users.findByEmail(email.toLowerCase(java.util.Locale.ROOT)).map(u->User.withUsername(u.email).password(u.password).roles(u.role).build()).orElseThrow(()->new UsernameNotFoundException("Identité inconnue"));}
- @Bean SecurityFilterChain filter(HttpSecurity http,ClinicRepository clinics,MembershipRepository memberships,UserRepository users,ActivityLog activityLog) throws Exception {
+ @Bean SecurityFilterChain filter(HttpSecurity http,ClinicRepository clinics,MembershipRepository memberships,UserRepository users) throws Exception {
   http.authorizeHttpRequests(a->a.dispatcherTypeMatchers(DispatcherType.ASYNC,DispatcherType.ERROR).permitAll()
     .requestMatchers("/api/csrf","/api/clinic","/api/clinics","/api/directory","/api/register","/api/login","/api/login/code","/api/professionals/**","/api/events","/api/ab/metrics","/api/google/callback","/api/auth/google/**","/actuator/health").permitAll()
     .requestMatchers("/api/master/**").access((auth,ctx)->new AuthorizationDecision(users.findByEmail(auth.get().getName()).map(u->AppUser.MASTER.equals(u.role)).orElse(false)))
@@ -27,9 +25,6 @@ public class SecurityConfig {
     .requestMatchers("/api/**").authenticated().anyRequest().permitAll())
    .addFilterAfter(new TenantFilter(clinics,memberships,users),AnonymousAuthenticationFilter.class)
    .requestCache(c->c.disable())
-   .formLogin(f->f.loginProcessingUrl("/api/login")
-    .successHandler((req,res,auth)->{attempts.succeeded(auth.getName());activityLog.recordByEmail(null,auth.getName(),Activity.LOGIN,"Mot de passe");res.setStatus(204);})
-    .failureHandler((req,res,ex)->{attempts.failed(req.getParameter("username"));res.setStatus(401);res.setContentType("application/problem+json");res.getWriter().write("{\"title\":\"Identifiants incorrects\",\"status\":401}");}))
    .logout(l->l.logoutUrl("/api/logout").logoutSuccessHandler((req,res,auth)->res.setStatus(204)))
    .exceptionHandling(e->e.authenticationEntryPoint((req,res,ex)->{res.setStatus(401);res.setContentType("application/problem+json");res.getWriter().write("{\"title\":\"Connexion requise\",\"status\":401}");})
     .accessDeniedHandler((req,res,ex)->{res.setStatus(403);res.setContentType("application/problem+json");res.getWriter().write("{\"title\":\"Action refusée ou jeton CSRF expiré\",\"status\":403}");}));
