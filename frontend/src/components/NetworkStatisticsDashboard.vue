@@ -31,10 +31,10 @@ async function showDetail(slug:string){
  document.getElementById('stats-clinic-detail')?.focus();
 }
 onMounted(()=>void load());
+defineExpose({reload:()=>{if(!loading.value)void load()}});
 </script>
 <template>
- <div class="admin">
-  <div class="section-title"><div><p class="eyebrow dark">STATISTIQUES GLOBALES</p><h1 tabindex="-1">Tous les cabinets</h1></div><button class="secondary" :aria-disabled="loading" @click="!loading&&load()">Actualiser</button></div>
+ <div>
   <div role="alert"><p v-if="error" class="alert error">{{error}}</p></div>
   <template v-if="network">
    <p class="stats-scope">{{count(network.clinics)}} cabinet{{network.clinics>1?'s':''}} · {{count(network.professionals)}} praticien{{network.professionals>1?'s':''}}</p>

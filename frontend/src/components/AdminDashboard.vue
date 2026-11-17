@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import {ref,watch} from 'vue';
+import {nextTick,ref,watch} from 'vue';
 import {api,ApiError} from '../api';
 import {useClinic} from '../stores/clinic';
-import AdminLogs from './AdminLogs.vue';
 import {useSession} from '../stores/session';
 import {safeColor,slugify} from '../tenant';
-import {specialties,dateLabel,timeLabel} from '../types';
+import {specialties,dateLabel,timeLabel,type AdminTab} from '../types';
+import ActivityHistory from './ActivityHistory.vue';
+import ClinicStatisticsDashboard from './ClinicStatisticsDashboard.vue';
+import NetworkStatisticsDashboard from './NetworkStatisticsDashboard.vue';
 interface Overview {professionals:number;upcoming:number;members:number;admins:number}
 interface Member {id:number;name:string;email:string;role:'ADMIN'|'MEMBER'}
 interface Booking {id:number;startsAt:string;professionalName:string;specialty:string;patientName:string;status:string}
@@ -13,9 +15,9 @@ interface ClinicStats {slug:string;name:string;city:string;address:string|null;c
 const emit=defineEmits<{open:[slug:string]}>();
 const clinic=useClinic(),session=useSession();
 const overview=ref<Overview|null>(null),members=ref<Member[]>([]),bookings=ref<Booking[]>([]),all=ref<ClinicStats[]>([]);
-const loading=ref(false),error=ref(''),logsVersion=ref(0);
+const loading=ref(false),error=ref('');
 async function load(){
- loading.value=true;error.value='';logsVersion.value++;
+ loading.value=true;error.value='';
  try{
   [overview.value,members.value,bookings.value]=await Promise.all([api<Overview>('/admin/overview'),api<Member[]>('/admin/members'),api<Booking[]>('/admin/appointments')]);
   all.value=session.user?.role==='MASTER'?await api<ClinicStats[]>('/master/clinics'):[];
@@ -36,7 +38,7 @@ async function createClinic(){
   const body={...form.value,adminEmail:form.value.adminEmail||null};
   const c=await api<ClinicStats>('/master/clinics',{method:'POST',body:JSON.stringify(body)});
   all.value=[...all.value,c].sort((a,b)=>a.slug.localeCompare(b.slug));
-  creating.value=false;logsVersion.value++;created.value=`Le cabinet « ${c.name} » a été créé.`;
+  creating.value=false;created.value=`Le cabinet « ${c.name} » a été créé.`;
   await clinic.loadMine().catch(()=>{});
  }catch(e){formError.value=e instanceof Error?e.message:'Création impossible.';if(e instanceof ApiError)fieldErrors.value=e.fields}
  finally{saving.value=false}
@@ -57,15 +59,41 @@ async function addMember(){
   const m=await api<Member>('/admin/members',{method:'POST',body:JSON.stringify(newMember.value)});
   members.value=[...members.value,m].sort((a,b)=>a.role===b.role?a.name.localeCompare(b.name):a.role==='ADMIN'?-1:1);
   if(overview.value)overview.value={...overview.value,members:overview.value.members+1,admins:overview.value.admins+(m.role==='ADMIN'?1:0)};
-  adding.value=false;logsVersion.value++;added.value=`${m.name} a été ajouté${m.role==='ADMIN'?' comme admin':''}.`;
+  adding.value=false;added.value=`${m.name} a été ajouté${m.role==='ADMIN'?' comme admin':''}.`;
  }catch(e){addError.value=e instanceof Error?e.message:'Ajout impossible.';if(e instanceof ApiError)addErrors.value=e.fields}
  finally{addingBusy.value=false}
 }
 watch(()=>clinic.current?.slug,()=>{adding.value=false;added.value=''});
+
+const tabs:{id:AdminTab;label:string}[]=[{id:'manage',label:'Gestion'},{id:'stats',label:'Statistiques'},{id:'history',label:'Historique'}];
+const tab=defineModel<AdminTab>('tab',{default:'manage'});
+const opened=ref(new Set<AdminTab>([tab.value]));
+watch(tab,next=>{opened.value.add(next)});
+const statsPanel=ref<{reload:()=>void}|null>(null),historyPanel=ref<InstanceType<typeof ActivityHistory>|null>(null);
+function selectTab(next:AdminTab,focus=false){
+ tab.value=next;
+ if(focus)void nextTick(()=>document.getElementById(`admin-tab-${next}`)?.focus());
+}
+function onTabKey(e:KeyboardEvent){
+ const index=tabs.findIndex(t=>t.id===tab.value);
+ const moves:Record<string,number>={ArrowRight:(index+1)%tabs.length,ArrowLeft:(index-1+tabs.length)%tabs.length,Home:0,End:tabs.length-1};
+ if(!(e.key in moves))return;
+ e.preventDefault();
+ selectTab(tabs[moves[e.key]].id,true);
+}
+function refresh(){
+ if(tab.value==='history')historyPanel.value?.reload();
+ else if(tab.value==='stats')statsPanel.value?.reload();
+ else if(!loading.value)void load();
+}
 </script>
 <template>
  <div class="admin">
-  <div class="section-title"><div><p class="eyebrow dark">{{session.user?.role==='MASTER'?'ADMINISTRATION GLOBALE':'ADMINISTRATION DU CABINET'}}</p><h1 tabindex="-1">{{clinic.current?.name}}</h1></div><button class="secondary" :aria-disabled="loading" @click="!loading&&load()">Actualiser</button></div>
+  <div class="section-title"><div><p class="eyebrow dark">{{session.user?.role==='MASTER'?'ADMINISTRATION GLOBALE':'ADMINISTRATION DU CABINET'}}</p><h1 tabindex="-1">{{clinic.current?.name}}</h1></div><button class="secondary" :aria-disabled="tab==='manage'&&loading" @click="refresh">Actualiser</button></div>
+  <div class="admin-tabs" role="tablist" aria-label="Sections de l’administration" @keydown="onTabKey">
+   <button v-for="t in tabs" :id="`admin-tab-${t.id}`" :key="t.id" type="button" role="tab" :aria-selected="tab===t.id" :aria-controls="`admin-panel-${t.id}`" :tabindex="tab===t.id?0:-1" @click="selectTab(t.id)">{{t.label}}</button>
+  </div>
+  <div v-show="tab==='manage'" id="admin-panel-manage" role="tabpanel" aria-labelledby="admin-tab-manage">
   <div role="alert"><p v-if="error" class="alert error">{{error}}</p></div>
   <section v-if="all.length" class="admin-block" aria-labelledby="all-clinics">
    <div class="admin-block-head"><h2 id="all-clinics">Tous les cabinets</h2><button v-if="!creating" class="secondary" @click="openForm">Nouveau cabinet</button></div>
@@ -126,6 +154,15 @@ watch(()=>clinic.current?.slug,()=>{adding.value=false;added.value=''});
     <tbody><tr v-for="m in members" :key="m.id"><td>{{m.name}}</td><td>{{m.email}}</td><td><span v-if="m.role==='ADMIN'" class="clinic-role">Admin</span><template v-else>Patient</template></td></tr></tbody>
    </table></div>
   </section>
-  <AdminLogs :master="isMaster()" :clinic-slug="clinic.current?.slug" :version="logsVersion"/>
+  </div>
+  <div v-show="tab==='stats'" id="admin-panel-stats" role="tabpanel" aria-labelledby="admin-tab-stats">
+   <template v-if="opened.has('stats')">
+    <NetworkStatisticsDashboard v-if="isMaster()" ref="statsPanel"/>
+    <ClinicStatisticsDashboard v-else ref="statsPanel"/>
+   </template>
+  </div>
+  <div v-show="tab==='history'" id="admin-panel-history" role="tabpanel" aria-labelledby="admin-tab-history">
+   <ActivityHistory v-if="opened.has('history')" ref="historyPanel" :global="isMaster()" :clinics="all"/>
+  </div>
  </div>
 </template>

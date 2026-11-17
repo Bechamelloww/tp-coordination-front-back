@@ -95,8 +95,8 @@ Appels sans cabinet (le filtre ne s'applique pas) : `/api/csrf`, `/api/login`, `
 
 | Rôle | Où il est stocké | Ce qu'il ouvre |
 |---|---|---|
-| `MASTER` | `app_user.role` | Tous les cabinets (sans `membership`), en admin ; vue globale `GET /api/master/clinics` ; création d'un cabinet `POST /api/master/clinics` |
-| `ADMIN` | `membership.role`, par cabinet | Tableau de bord du cabinet : `GET /api/admin/overview`, `/members`, `/appointments` ; ajout d'un membre `POST /api/admin/members` |
+| `MASTER` | `app_user.role` | Tous les cabinets (sans `membership`), en admin ; vue globale `GET /api/master/clinics` ; création d'un cabinet `POST /api/master/clinics` ; historique de tous les cabinets `GET /api/master/activity` |
+| `ADMIN` | `membership.role`, par cabinet | Tableau de bord du cabinet : `GET /api/admin/overview`, `/members`, `/appointments`, `/activity` ; ajout d'un membre `POST /api/admin/members` |
 | `MEMBER` | `membership.role` (défaut) | Rien de plus qu'un patient |
 
 ### Qui voit quoi
@@ -119,7 +119,7 @@ Limite : le direct (SSE) des disponibilités ne suit qu'un cabinet à la fois, c
   Un admin de `cabinet-a` qui envoie `X-Clinic: cabinet-b` reçoit donc 404, comme tout non-membre.
 - `SecurityConfig` : `/api/admin/**` exige `CLINIC_ADMIN`, `/api/master/**` exige `MASTER` (et n'a pas de cabinet).
 - Les requêtes d'administration sont en JDBC et filtrent toutes sur `TenantContext.require()`, jamais sur un identifiant reçu.
-  `GET /api/master/clinics` est la seule requête inter-cabinets, réservée au `MASTER`.
+  `GET /api/master/clinics` et `GET /api/master/activity` sont les seules requêtes inter-cabinets, réservées au `MASTER`.
 - **Création d'un cabinet** (`POST /api/master/clinics`, master seulement) : identifiant (`[a-z0-9-]`, unique, sinon 409), nom, ville,
   adresse postale (`V11__clinic_address.sql`), couleur `#rrggbb` et, en option, l'e-mail d'un compte existant qui devient `ADMIN` du cabinet.
   Ce compte se choisit dans une liste fournie par `GET /api/master/accounts` (tous les comptes sauf les masters). Tout est fait dans une transaction :
@@ -129,32 +129,22 @@ Limite : le direct (SSE) des disponibilités ne suit qu'un cabinet à la fois, c
   `MEMBER` ou `ADMIN`. 404 si le compte n'existe pas, 409 s'il est déjà membre, 400 pour un master. Le cabinet vient de `TenantContext`.
   Dans l'interface, seul le master choisit dans la liste des comptes ; un admin saisit l'e-mail (il ne voit pas les comptes des autres cabinets).
   Test : `AdminMembersIntegrationTest`.
+- **Administration en trois onglets** : « Gestion » (cabinets, membres, prochains rendez-vous), « Statistiques » (vue réseau pour le master,
+  vue du cabinet pour un admin) et « Historique ».
+- **Historique des actions** (onglet « Historique ») : table `activity_log`
+  (`V13__activity_log.sql`, reprise des `audit_event` existants), alimentée par `ActivityLog` à chaque rendez-vous réservé, déplacé
+  ou annulé, inscription, membre ajouté, cabinet créé, connexion (mot de passe ou Google) et liaison Google Agenda.
+  `clinic_id` est vide pour les actions hors cabinet (connexions, Google Agenda).
+  `GET /api/admin/activity` (admin du cabinet ou master) : le cabinet courant seulement, via `TenantContext`.
+  `GET /api/master/activity` (master) : tous les cabinets, `clinic=<slug>` pour un cabinet, `outside=true` pour les actions hors cabinet.
+  Filtres communs : `action`, `from` et `to` (jours, heure de Paris), `text` (nom, e-mail, détail ; 100 caractères au plus),
+  pagination par `before=<id>` (50 lignes, `more` indique la suite). Test : `ActivityLogIntegrationTest`.
 - `V9__roles.sql` contraint les valeurs (`PATIENT`/`MASTER`, `MEMBER`/`ADMIN`).
 - Comptes de démo (mot de passe `DEMO_PASSWORD`) : `master@medislot.test`, `admin-a@medislot.test`, `admin-b@medislot.test`.
 - Ajout de comptes : `scripts/add-user.sh` (voir l'en-tête du script ; `--list` pour lister comptes et rôles).
 
 Tests : `TenantFilterTest` (rôle admin posé puis retiré, admin d'un autre cabinet en 404, master partout),
 `RolesIntegrationTest` (403 patient, 404 admin hors de son cabinet, vue globale du master), `ClinicSchemaTest` (contraintes de rôle).
-
-### Journal d'activité du cabinet
-
-Chaque cabinet a son journal (table `admin_log`, migration V13). Une ligne = qui, quand, quoi, en une phrase :
-
-| Action | Exemple de détail |
-|---|---|
-| `APPOINTMENT_BOOKED` | Camille Dupont a pris rendez-vous avec Dr Sarah Martin (Médecine générale) pour le mardi 18 novembre 2026 à 10h00 |
-| `APPOINTMENT_MOVED` | … a déplacé son rendez-vous avec … pour le … : nouveau rendez-vous avec … pour le … |
-| `APPOINTMENT_CANCELLED` | … a annulé son rendez-vous avec … pour le … |
-| `ACCOUNT_CREATED` | Jeanne Durand (jeanne@…) a créé son compte (ou « avec Google ») |
-| `ACCOUNT_GOOGLE_LINKED` | … a associé son compte Google à son compte MediSlot (dans chaque cabinet du compte) |
-| `MEMBER_JOINED` | … a rejoint le cabinet en prenant rendez-vous |
-| `MEMBER_ADDED` | Alex Martin (autre@…) ajouté comme patient / comme admin |
-| `CLINIC_CREATED` | Cabinet « … » créé (slug, ville) |
-
-- **Lecture** : `GET /api/admin/logs` (admins du cabinet courant et master, comme tout `/api/admin/**`) ; `GET /api/master/logs` (master, tous cabinets). 50 lignes par page, `?before=<id>` pour la suite. Personne d'autre : 401 sans session, 403 pour un patient, 404 pour l'admin d'un autre cabinet.
-- **Écriture** : dans la transaction de l'action ; une action refusée (409, 404, 400) ne laisse pas de ligne.
-- **Ajout seul** : un trigger refuse `UPDATE` et `DELETE`, et `medislot_app` n'a pas ces droits.
-- Le journal démarre à la migration : les actions antérieures n'y sont pas.
 
 ## §3 RLS et cache
 
