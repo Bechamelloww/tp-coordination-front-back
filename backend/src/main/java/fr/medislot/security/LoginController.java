@@ -1,8 +1,10 @@
 package fr.medislot.security;
 
+import fr.medislot.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Map;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -28,25 +30,30 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/login")
 public class LoginController {
- public record CodeRequest(String code) {}
+ public record CodeRequest(String code, Boolean remember) {}
 
  private final DaoAuthenticationProvider passwords;
  private final UserDetailsService userDetails;
  private final LoginAttempts attempts;
  private final LoginCodes codes;
+ private final TrustedDevices devices;
+ private final UserRepository users;
  private final SecurityContextRepository contextRepository = new HttpSessionSecurityContextRepository();
  private final HttpSessionCsrfTokenRepository csrfTokens = new HttpSessionCsrfTokenRepository();
 
- public LoginController(UserDetailsService userDetails, PasswordEncoder encoder, LoginAttempts attempts, LoginCodes codes) {
+ public LoginController(UserDetailsService userDetails, PasswordEncoder encoder, LoginAttempts attempts, LoginCodes codes,
+   TrustedDevices devices, UserRepository users) {
   this.passwords = new DaoAuthenticationProvider(userDetails);
   this.passwords.setPasswordEncoder(encoder);
   this.userDetails = userDetails;
   this.attempts = attempts;
   this.codes = codes;
+  this.devices = devices;
+  this.users = users;
  }
 
  @PostMapping
- public ResponseEntity<?> password(HttpServletRequest request,
+ public ResponseEntity<?> password(HttpServletRequest request, HttpServletResponse response,
    @RequestParam(name = "username", required = false) String username,
    @RequestParam(name = "password", required = false) String password) {
   if (attempts.blocked(username)) {
@@ -62,6 +69,10 @@ public class LoginController {
    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem(HttpStatus.UNAUTHORIZED, "Identifiants incorrects", null));
   }
   attempts.succeeded(authenticated.getName());
+  if (devices.trusted(userId(authenticated.getName()), request)) {
+   signIn(authenticated.getName(), request, response);
+   return ResponseEntity.noContent().build();
+  }
   try {
    codes.send(request.getSession(), authenticated.getName());
   } catch (MailException unavailable) {
@@ -78,12 +89,18 @@ public class LoginController {
   return switch (result.outcome()) {
    case VALID -> {
     signIn(result.email(), request, response);
-    yield ResponseEntity.noContent().build();
+    var ok = ResponseEntity.noContent();
+    if (Boolean.TRUE.equals(body.remember())) ok.header(HttpHeaders.SET_COOKIE, devices.remember(userId(result.email())).toString());
+    yield ok.build();
    }
    case WRONG -> unauthorized("Code incorrect.", "CODE_INCORRECT");
    case TOO_MANY_TRIES -> unauthorized("Trop d'essais. Reconnectez-vous pour recevoir un nouveau code.", "CODE_EPUISE");
    case EXPIRED -> unauthorized("Le code a expiré. Reconnectez-vous pour recevoir un nouveau code.", "CODE_EXPIRE");
   };
+ }
+
+ private long userId(String email) {
+  return users.findByEmail(email).orElseThrow().id;
  }
 
  private void signIn(String email, HttpServletRequest request, HttpServletResponse response) {

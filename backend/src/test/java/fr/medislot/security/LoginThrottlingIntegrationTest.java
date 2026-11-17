@@ -75,6 +75,34 @@ class LoginThrottlingIntegrationTest {
   if(before.equals(session.getId()))throw new AssertionError("l'identifiant de session n'a pas changé");
   mvc.perform(get("/api/me").session(session)).andExpect(status().isOk()).andExpect(jsonPath("$.email").value("patient@medislot.test"));
  }
+ String deviceCookie(String email,boolean remember) throws Exception {
+  MockHttpSession session=new MockHttpSession();
+  mvc.perform(post("/api/login").session(session).with(csrf()).param("username",email).param("password",PASSWORD)).andExpect(status().isAccepted());
+  String header=mvc.perform(post("/api/login/code").session(session).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+    .content("{\"code\":\""+lastCode()+"\",\"remember\":"+remember+"}"))
+   .andExpect(status().isNoContent()).andReturn().getResponse().getHeader("Set-Cookie");
+  if(header==null||!header.startsWith(TrustedDevices.COOKIE+"="))return null;
+  if(!header.contains("HttpOnly")||!header.contains("Path=/api/login"))throw new AssertionError(header);
+  return header.substring(TrustedDevices.COOKIE.length()+1,header.indexOf(';'));
+ }
+ @Test void aRememberedDeviceSkipsTheCode() throws Exception {
+  String token=deviceCookie("patient@medislot.test",true);
+  MockHttpSession session=new MockHttpSession();
+  mvc.perform(post("/api/login").session(session).with(csrf()).cookie(new jakarta.servlet.http.Cookie(TrustedDevices.COOKIE,token))
+    .param("username","patient@medislot.test").param("password",PASSWORD)).andExpect(status().isNoContent());
+  mvc.perform(get("/api/me").session(session)).andExpect(status().isOk()).andExpect(jsonPath("$.email").value("patient@medislot.test"));
+  verify(mail,org.mockito.Mockito.times(1)).send(org.mockito.ArgumentMatchers.any(SimpleMailMessage.class));
+ }
+ @Test void aDeviceOfAnotherAccountStillAsksForTheCode() throws Exception {
+  String token=deviceCookie("patient@medislot.test",true);
+  mvc.perform(post("/api/login").with(csrf()).cookie(new jakarta.servlet.http.Cookie(TrustedDevices.COOKIE,token))
+    .param("username","autre@medislot.test").param("password",PASSWORD)).andExpect(status().isAccepted());
+  mvc.perform(post("/api/login").with(csrf()).cookie(new jakarta.servlet.http.Cookie(TrustedDevices.COOKIE,"faux-jeton"))
+    .param("username","patient@medislot.test").param("password",PASSWORD)).andExpect(status().isAccepted());
+ }
+ @Test void noDeviceIsRememberedWithoutConsent() throws Exception {
+  if(deviceCookie("patient@medislot.test",false)!=null)throw new AssertionError("cookie posé sans consentement");
+ }
  @Test void aWrongCodeOpensNoSession() throws Exception {
   MockHttpSession session=new MockHttpSession();
   mvc.perform(post("/api/login").session(session).with(csrf()).param("username","patient@medislot.test").param("password",PASSWORD)).andExpect(status().isAccepted());
