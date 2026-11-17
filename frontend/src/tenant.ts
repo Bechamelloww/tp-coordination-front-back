@@ -27,3 +27,7 @@ export function setCurrentClinic(slug:string|null){current=slug&&SLUG.test(slug)
 export const currentClinic=()=>current;
 /** EventSource ne sait pas poser d'en-tête : le cabinet passe dans l'adresse. */
 export function withClinic(path:string){return current?`${path}${path.includes('?')?'&':'?'}clinic=${current}`:path}
+/** Identifiant proposé à partir du nom : « Centre médical du Port » donne centre-medical-du-port. */
+export function slugify(name:string):string{
+ return name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,40).replace(/^-+|-+$/g,'');
+}

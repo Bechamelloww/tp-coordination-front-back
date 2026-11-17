@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import {ref,watch} from 'vue';
-import {api} from '../api';
+import {api,ApiError} from '../api';
 import {useClinic} from '../stores/clinic';
 import {useSession} from '../stores/session';
-import {safeColor} from '../tenant';
+import {safeColor,slugify} from '../tenant';
 import {specialties,dateLabel,timeLabel} from '../types';
 interface Overview {professionals:number;upcoming:number;members:number;admins:number}
 interface Member {id:number;name:string;email:string;role:'ADMIN'|'MEMBER'}
@@ -22,13 +22,43 @@ async function load(){
  finally{loading.value=false}
 }
 watch(()=>clinic.current?.slug,()=>void load(),{immediate:true});
+
+// Création d'un cabinet (master seulement). L'identifiant suit le nom tant qu'on ne l'a pas modifié à la main.
+const blank=()=>({name:'',city:'',slug:'',color:'#0873b9',adminEmail:''});
+const creating=ref(false),saving=ref(false),form=ref(blank()),slugTouched=ref(false),formError=ref(''),fieldErrors=ref<Record<string,string>>({}),created=ref('');
+watch(()=>form.value.name,name=>{if(!slugTouched.value)form.value.slug=slugify(name)});
+function openForm(){creating.value=true;created.value='';form.value=blank();slugTouched.value=false;formError.value='';fieldErrors.value={}}
+async function createClinic(){
+ if(saving.value)return;saving.value=true;formError.value='';fieldErrors.value={};
+ try{
+  const body={...form.value,adminEmail:form.value.adminEmail.trim()||null};
+  const c=await api<ClinicStats>('/master/clinics',{method:'POST',body:JSON.stringify(body)});
+  all.value=[...all.value,c].sort((a,b)=>a.slug.localeCompare(b.slug));
+  creating.value=false;created.value=`Le cabinet « ${c.name} » a été créé.`;
+  await clinic.loadMine().catch(()=>{});
+ }catch(e){formError.value=e instanceof Error?e.message:'Création impossible.';if(e instanceof ApiError)fieldErrors.value=e.fields}
+ finally{saving.value=false}
+}
 </script>
 <template>
  <div class="admin">
   <div class="section-title"><div><p class="eyebrow dark">{{session.user?.role==='MASTER'?'ADMINISTRATION GLOBALE':'ADMINISTRATION DU CABINET'}}</p><h1 tabindex="-1">{{clinic.current?.name}}</h1></div><button class="secondary" :aria-disabled="loading" @click="!loading&&load()">Actualiser</button></div>
   <div role="alert"><p v-if="error" class="alert error">{{error}}</p></div>
   <section v-if="all.length" class="admin-block" aria-labelledby="all-clinics">
-   <h2 id="all-clinics">Tous les cabinets</h2>
+   <div class="admin-block-head"><h2 id="all-clinics">Tous les cabinets</h2><button v-if="!creating" class="secondary" @click="openForm">Nouveau cabinet</button></div>
+   <div role="status"><p v-if="created" class="alert success">{{created}}</p></div>
+   <form v-if="creating" class="admin-form" novalidate @submit.prevent="createClinic">
+    <h3>Nouveau cabinet</h3>
+    <div class="admin-form-grid">
+     <div class="field"><label for="clinic-name">Nom</label><input id="clinic-name" v-model="form.name" maxlength="120" placeholder="Centre médical du Port" :aria-invalid="!!fieldErrors.name"><p v-if="fieldErrors.name" class="error-text">{{fieldErrors.name}}</p></div>
+     <div class="field"><label for="clinic-city">Ville</label><input id="clinic-city" v-model="form.city" maxlength="80" placeholder="Marseille" :aria-invalid="!!fieldErrors.city"><p v-if="fieldErrors.city" class="error-text">{{fieldErrors.city}}</p></div>
+     <div class="field"><label for="clinic-slug">Identifiant dans l’adresse</label><input id="clinic-slug" v-model="form.slug" maxlength="40" aria-describedby="clinic-slug-hint" :aria-invalid="!!fieldErrors.slug" @input="slugTouched=true"><p id="clinic-slug-hint" class="hint">localhost:8088/c/{{form.slug||'…'}}/</p><p v-if="fieldErrors.slug" class="error-text">{{fieldErrors.slug}}</p></div>
+     <div class="field"><label for="clinic-color">Couleur</label><input id="clinic-color" v-model="form.color" type="color" :aria-invalid="!!fieldErrors.color"><p v-if="fieldErrors.color" class="error-text">{{fieldErrors.color}}</p></div>
+     <div class="field wide"><label for="clinic-admin">E-mail de l’admin <span class="hint">(facultatif, compte existant)</span></label><input id="clinic-admin" v-model="form.adminEmail" type="email" autocomplete="off" placeholder="chef@medislot.test" :aria-invalid="!!fieldErrors.adminEmail"><p v-if="fieldErrors.adminEmail" class="error-text">{{fieldErrors.adminEmail}}</p></div>
+    </div>
+    <p role="alert" class="error-text"><template v-if="formError">{{formError}}</template></p>
+    <div class="admin-form-actions"><button type="submit" class="primary" :aria-disabled="saving">{{saving?'Création…':'Créer le cabinet'}}</button><button type="button" class="text-button" @click="creating=false">Annuler</button></div>
+   </form>
    <div class="admin-clinics">
     <article v-for="c in all" :key="c.slug" class="admin-clinic" :class="{current:c.slug===clinic.current?.slug}" :style="{'--option':safeColor(c.color)}">
      <h3>{{c.name}}</h3>
