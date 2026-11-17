@@ -89,9 +89,8 @@ public class LoginController {
   return switch (result.outcome()) {
    case VALID -> {
     signIn(result.email(), request, response);
-    var ok = ResponseEntity.noContent();
-    if (Boolean.TRUE.equals(body.remember())) ok.header(HttpHeaders.SET_COOKIE, devices.remember(userId(result.email())).toString());
-    yield ok.build();
+    if (Boolean.TRUE.equals(body.remember())) response.addHeader(HttpHeaders.SET_COOKIE, devices.remember(userId(result.email())).toString());
+    yield ResponseEntity.noContent().build();
    }
    case WRONG -> unauthorized("Code incorrect.", "CODE_INCORRECT");
    case TOO_MANY_TRIES -> unauthorized("Trop d'essais. Reconnectez-vous pour recevoir un nouveau code.", "CODE_EPUISE");

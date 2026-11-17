@@ -45,3 +45,4 @@
 @media(max-width:650px){.stats-indicators{grid-template-columns:1fr 1fr}.admin-table th[scope=row]{min-width:170px}.stats-indicator dd{font-size:22px}.stats-bar-column{min-width:140px}.stats-detail .admin-block-head{flex-direction:column;align-items:flex-start}}
 @media(max-width:1180px){.header{height:auto;min-height:90px}.header nav{flex-wrap:wrap;justify-content:flex-end;column-gap:15px;row-gap:0}}
 .admin-table{position:relative}
+.auth-form .remember{flex-direction:row;align-items:center;gap:10px;font-weight:500;color:var(--navy)}.auth-form .remember input{width:18px;height:18px;padding:0;margin:0;accent-color:var(--blue)}.auth-form .code-input{font-size:22px;letter-spacing:.35em;font-variant-numeric:tabular-nums}
