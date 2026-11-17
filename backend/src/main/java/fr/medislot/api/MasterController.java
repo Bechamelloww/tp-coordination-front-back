@@ -49,18 +49,19 @@ public class MasterController {
   String slug=in.slug().strip();
   if(Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from clinic where slug=?)",Boolean.class,slug)))
    throw new ResponseStatusException(HttpStatus.CONFLICT,"Cet identifiant est déjà pris par un autre cabinet.");
-  Long admin=null; String email=null;
+  Long admin=null; String email=null, adminName=null;
   if(in.adminEmail()!=null&&!in.adminEmail().isBlank()){
    email=in.adminEmail().strip().toLowerCase(Locale.ROOT);
-   admin=jdbc.query("select id from app_user where email=?",(rs,i)->rs.getLong(1),email).stream().findFirst()
+   var found=jdbc.query("select id,name from app_user where email=?",(rs,i)->new Object[]{rs.getLong(1),rs.getString(2)},email).stream().findFirst()
     .orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"Aucun compte avec cette adresse : créez-le d'abord."));
+   admin=(Long)found[0];adminName=(String)found[1];
   }
   Long id=jdbc.queryForObject("insert into clinic(slug,name,city,address,color) values (?,?,?,?,?) returning id",Long.class,
    slug,in.name().strip(),in.city().strip(),in.address().strip(),in.color().toLowerCase(Locale.ROOT));
   log.record(id,principal.getName(),AdminLog.CLINIC_CREATED,"Cabinet « "+in.name().strip()+" » créé ("+slug+", "+in.city().strip()+")");
   if(admin!=null){
    jdbc.update("insert into membership(user_id,clinic_id,role) values (?,?,'ADMIN')",admin,id);
-   log.record(id,principal.getName(),AdminLog.MEMBER_ADDED,email+" ajouté comme admin");
+   log.record(id,principal.getName(),AdminLog.MEMBER_ADDED,adminName+" ("+email+") ajouté comme admin");
   }
   return jdbc.queryForObject(STATS+" where c.id=?",(rs,i)->stats(rs),id);
  }

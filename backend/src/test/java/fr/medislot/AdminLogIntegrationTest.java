@@ -20,9 +20,10 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-/** Journal des actions d'administration : écrit à chaque action, lu par cabinet, jamais public. Base dédiée. */
+/** Journal d'activité des cabinets : écrit à chaque action, lu par cabinet, jamais public. Base dédiée. */
 @SpringBootTest @Testcontainers
 class AdminLogIntegrationTest {
  @Container static PostgreSQLContainer db=new PostgreSQLContainer("postgres:18");
@@ -43,7 +44,7 @@ class AdminLogIntegrationTest {
    .andExpect(status().isOk())
    .andExpect(jsonPath("$[0].action").value("MEMBER_ADDED"))
    .andExpect(jsonPath("$[0].actor").value("admin-b@medislot.test"))
-   .andExpect(jsonPath("$[0].detail").value("autre@medislot.test ajouté comme patient"))
+   .andExpect(jsonPath("$[0].detail").value("Alex Martin (autre@medislot.test) ajouté comme patient"))
    .andExpect(jsonPath("$[0].clinicSlug").value("cabinet-b"));
   mvc.perform(get("/api/admin/logs").header("X-Clinic","cabinet-a").with(user("admin-a@medislot.test").roles("PATIENT")))
    .andExpect(status().isOk()).andExpect(jsonPath("$[*].clinicSlug",everyItem(is("cabinet-a"))));
@@ -55,11 +56,45 @@ class AdminLogIntegrationTest {
    .andExpect(status().isCreated());
   mvc.perform(get("/api/admin/logs").header("X-Clinic","cabinet-journal").with(user("autre@medislot.test").roles("PATIENT")))
    .andExpect(status().isOk()).andExpect(jsonPath("$",hasSize(2)))
-   .andExpect(jsonPath("$[0].detail").value("autre@medislot.test ajouté comme admin"))
+   .andExpect(jsonPath("$[0].detail").value("Alex Martin (autre@medislot.test) ajouté comme admin"))
    .andExpect(jsonPath("$[1].action").value("CLINIC_CREATED"))
    .andExpect(jsonPath("$[1].actor").value("master@medislot.test"));
   mvc.perform(get("/api/master/logs").with(user("master@medislot.test").roles("MASTER")))
    .andExpect(status().isOk()).andExpect(jsonPath("$[*].clinicSlug",hasItem("cabinet-journal")));
+ }
+
+ private org.springframework.test.web.servlet.ResultActions logsOf(String clinic,String admin) throws Exception {
+  return mvc.perform(get("/api/admin/logs").header("X-Clinic",clinic).with(user(admin).roles("PATIENT"))).andExpect(status().isOk());
+ }
+
+ @Test void leParcoursDUnPatientEstRaconteDansLeJournal() throws Exception {
+  // inscription dans cabinet-a
+  mvc.perform(post("/api/register").header("X-Clinic","cabinet-a").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+   .content("{\"email\":\"Jeanne@medislot.test\",\"password\":\"une phrase assez longue\",\"name\":\"Jeanne Durand\"}")).andExpect(status().isCreated());
+  logsOf("cabinet-a","admin-a@medislot.test").andExpect(jsonPath("$[0].action").value("ACCOUNT_CREATED"))
+   .andExpect(jsonPath("$[0].detail").value("Jeanne Durand (jeanne@medislot.test) a créé son compte"));
+  // rendez-vous dans cabinet-b : elle en devient membre, puis déplace et annule
+  Long pro=jdbc.queryForObject("select min(id) from professional where clinic_id=(select id from clinic where slug='cabinet-b')",Long.class);
+  String name=jdbc.queryForObject("select name from professional where id=?",String.class,pro);
+  var free=jdbc.queryForList("select s.id from slot s where s.professional_id=? and s.starts_at>now()+interval '1 day' and not exists(select 1 from appointment a where a.slot_id=s.id and a.status='CONFIRMED') order by s.starts_at limit 2",Long.class,pro);
+  String booked=mvc.perform(post("/api/appointments").header("X-Clinic","cabinet-b").with(user("jeanne@medislot.test").roles("PATIENT")).with(csrf())
+   .contentType(MediaType.APPLICATION_JSON).content("{\"slotId\":"+free.get(0)+"}")).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+  long id=com.jayway.jsonpath.JsonPath.<Number>read(booked,"$.id").longValue();
+  mvc.perform(patch("/api/appointments/"+id).header("X-Clinic","cabinet-b").with(user("jeanne@medislot.test").roles("PATIENT")).with(csrf())
+   .contentType(MediaType.APPLICATION_JSON).content("{\"slotId\":"+free.get(1)+"}")).andExpect(status().isOk());
+  mvc.perform(post("/api/appointments/"+id+"/cancel").header("X-Clinic","cabinet-b").with(user("jeanne@medislot.test").roles("PATIENT")).with(csrf())).andExpect(status().isOk());
+  String rdv="Jeanne Durand a pris rendez-vous avec "+name+" (";
+  logsOf("cabinet-b","admin-b@medislot.test")
+   .andExpect(jsonPath("$[0].action").value("APPOINTMENT_CANCELLED"))
+   .andExpect(jsonPath("$[0].detail",startsWith("Jeanne Durand a annulé son rendez-vous avec "+name)))
+   .andExpect(jsonPath("$[1].action").value("APPOINTMENT_MOVED"))
+   .andExpect(jsonPath("$[1].detail",allOf(startsWith("Jeanne Durand a déplacé son rendez-vous avec "+name),containsString(" : nouveau rendez-vous avec "))))
+   .andExpect(jsonPath("$[2].action").value("MEMBER_JOINED"))
+   .andExpect(jsonPath("$[3].action").value("APPOINTMENT_BOOKED"))
+   .andExpect(jsonPath("$[3].actor").value("jeanne@medislot.test"))
+   .andExpect(jsonPath("$[3].detail",allOf(startsWith(rdv),matchesPattern(".* pour le \\p{L}+ \\d{1,2} \\p{L}+ \\d{4} à \\d{2}h\\d{2}"))));
+  // rien de tout ça dans le journal de cabinet-a, à part l'inscription
+  logsOf("cabinet-a","admin-a@medislot.test").andExpect(jsonPath("$[*].detail",not(hasItem(startsWith(rdv)))));
  }
 
  @Test void uneActionRefuseeNeLaissePasDeTrace() throws Exception {

@@ -48,7 +48,7 @@ public class AdminController {
   if("MASTER".equals(user[2]))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Un compte master a déjà accès à tous les cabinets.");
   int added=jdbc.update("insert into membership(user_id,clinic_id,role) values (?,?,?) on conflict do nothing",user[0],clinic(),role);
   if(added==0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Ce compte est déjà membre du cabinet.");
-  log.record(clinic(),principal.getName(),AdminLog.MEMBER_ADDED,email+(role.equals("ADMIN")?" ajouté comme admin":" ajouté comme patient"));
+  log.record(clinic(),principal.getName(),AdminLog.MEMBER_ADDED,user[1]+" ("+email+")"+(role.equals("ADMIN")?" ajouté comme admin":" ajouté comme patient"));
   return new MemberDto((Long)user[0],(String)user[1],email,role);
  }
 
