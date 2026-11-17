@@ -8,7 +8,6 @@ import fr.medislot.repository.UserRepository;
 import fr.medislot.tenant.TenantFilter;
 import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.*;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.userdetails.*;
@@ -16,24 +15,13 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 @Configuration
 public class SecurityConfig {
  @Bean PasswordEncoder encoder(){return new BCryptPasswordEncoder();}
  @Bean UserDetailsService users(UserRepository users){return email -> users.findByEmail(email.toLowerCase(java.util.Locale.ROOT)).map(u->User.withUsername(u.email).password(u.password).roles(u.role).build()).orElseThrow(()->new UsernameNotFoundException("Identité inconnue"));}
- @Bean SecurityFilterChain filter(HttpSecurity http,ClinicRepository clinics,MembershipRepository memberships,UserRepository users,LoginAttempts attempts,ActivityLog activityLog) throws Exception {
-  var loginRequest=PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST,"/api/login");
-  http.addFilterBefore((request,response,chain)->{
-    var req=(jakarta.servlet.http.HttpServletRequest)request;var res=(jakarta.servlet.http.HttpServletResponse)response;
-    if(loginRequest.matches(req)&&attempts.blocked(req.getParameter("username"))){
-     res.setStatus(429);res.setHeader("Retry-After",String.valueOf(LoginAttempts.WINDOW.toSeconds()));res.setContentType("application/problem+json");
-     res.getWriter().write("{\"title\":\"Trop de tentatives. Réessayez dans 15 minutes.\",\"status\":429}");return;
-    }
-    chain.doFilter(request,response);
-   },UsernamePasswordAuthenticationFilter.class);
+ @Bean SecurityFilterChain filter(HttpSecurity http,ClinicRepository clinics,MembershipRepository memberships,UserRepository users,ActivityLog activityLog) throws Exception {
   http.authorizeHttpRequests(a->a.dispatcherTypeMatchers(DispatcherType.ASYNC,DispatcherType.ERROR).permitAll()
-    .requestMatchers("/api/csrf","/api/clinic","/api/clinics","/api/directory","/api/register","/api/login","/api/professionals/**","/api/events","/api/ab/metrics","/api/google/callback","/api/auth/google/**","/actuator/health").permitAll()
+    .requestMatchers("/api/csrf","/api/clinic","/api/clinics","/api/directory","/api/register","/api/login","/api/login/code","/api/professionals/**","/api/events","/api/ab/metrics","/api/google/callback","/api/auth/google/**","/actuator/health").permitAll()
     .requestMatchers("/api/master/**").access((auth,ctx)->new AuthorizationDecision(users.findByEmail(auth.get().getName()).map(u->AppUser.MASTER.equals(u.role)).orElse(false)))
     .requestMatchers("/api/admin/**").hasRole("CLINIC_ADMIN")
     .requestMatchers("/api/**").authenticated().anyRequest().permitAll())

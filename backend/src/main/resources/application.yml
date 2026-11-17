@@ -18,12 +18,19 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
 management:
   endpoints:
     web:
       exposure:
         include: health,info
+  health:
+    mail:
+      enabled: false
 medislot:
+  mail-from: ${MAIL_FROM:MediSlot <no-reply@medislot.test>}
   # Comptes de démo désactivés par défaut ; le mot de passe vient de DEMO_PASSWORD, jamais du code.
   demo-seed: ${DEMO_SEED:false}
   demo-password: ${DEMO_PASSWORD:}
