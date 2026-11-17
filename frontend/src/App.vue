@@ -163,7 +163,33 @@ onBeforeUnmount(()=>document.removeEventListener('keydown',trap));
   <AdminDashboard v-else-if="view==='admin'" @open="openClinic"/>
   <template v-else><div class="section-title"><div><p class="eyebrow dark">VOTRE ESPACE</p><h1 tabindex="-1">Mes rendez-vous</h1></div><button class="primary" @click="view='search'">Prendre rendez-vous</button></div><GoogleCalendarCard/><p v-if="!appointments.length" class="empty">Vous n’avez pas encore de rendez-vous.</p><article v-for="a in appointments" :key="a.id" class="appointment"><div class="appointment-date"><strong>{{dateLabel(a.startsAt)}}</strong><span>{{timeLabel(a.startsAt)}}</span></div><div class="appointment-person"><h2>{{a.professionalName}}</h2><p>{{specialties[a.specialty]}} · {{a.city}}</p><span class="status" :class="{cancelled:a.status==='CANCELLED'}">{{a.status==='CONFIRMED'?'Confirmé':'Annulé'}}</span></div><div class="appointment-actions"><button v-if="a.status==='CONFIRMED'" @click="move(a)">Déplacer <span class="sr-only">le rendez-vous du {{dateLabel(a.startsAt)}} à {{timeLabel(a.startsAt)}} avec {{a.professionalName}}</span></button><button v-if="a.status==='CONFIRMED'" class="danger-link" @click="cancelId=a.id">Annuler <span class="sr-only">le rendez-vous du {{dateLabel(a.startsAt)}} à {{timeLabel(a.startsAt)}} avec {{a.professionalName}}</span></button><ConvocationButton v-if="a.status==='CONFIRMED'" :appointment-id="a.id" :context="`du rendez-vous du ${dateLabel(a.startsAt)} à ${timeLabel(a.startsAt)} avec ${a.professionalName}`" @outdated="refreshAppointments"/><p v-else class="convocation-off">Plus de convocation : rendez-vous annulé.</p><button class="text-button" @click="showHistory(a.id)">Historique <span class="sr-only">du rendez-vous du {{dateLabel(a.startsAt)}} à {{timeLabel(a.startsAt)}} avec {{a.professionalName}}</span></button></div></article></template>
  </div>
- </main><footer><span class="brand footer-brand">MediSlot.</span><p>Votre parcours de soins, simplement.</p><small>Application de formation · Données fictives · Horaires Europe/Paris</small></footer>
+ </main>
+ <footer class="footer">
+  <div class="footer-inner">
+   <div class="footer-about">
+    <button type="button" class="brand footer-brand" @click="view='search';moveId=null;focusHeading()">MediSlot<span class="brand-dot">.</span></button>
+    <p>Votre parcours de soins, simplement. Trouvez un praticien, réservez en quelques clics, gérez vos rendez-vous en ligne.</p>
+   </div>
+   <nav class="footer-col" aria-label="Liens du pied de page">
+    <h2>Navigation</h2>
+    <ul>
+     <li><button type="button" @click="view='search'">Trouver un praticien</button></li>
+     <li><button type="button" @click="myAppointments">Mes rendez-vous</button></li>
+     <li v-if="clinic.isAdmin"><button type="button" @click="view='admin'">Administration du cabinet</button></li>
+     <li v-if="!session.user"><button type="button" @click="openAuth">Se connecter</button></li>
+    </ul>
+   </nav>
+   <div v-if="clinic.current" class="footer-col">
+    <h2>Votre cabinet</h2>
+    <p class="footer-clinic"><span class="clinic-dot" aria-hidden="true"></span><strong>{{clinic.current.name}}</strong></p>
+    <p>{{clinic.current.city}} · Horaires affichés en heure de Paris</p>
+   </div>
+  </div>
+  <div class="footer-bottom">
+   <small>© {{new Date().getFullYear()}} MediSlot · Application de formation</small>
+   <small>Praticiens et données fictifs · Aucune donnée de santé réelle</small>
+  </div>
+ </footer>
  <div v-if="modalKind" class="overlay" @click.self="closeModal"><section ref="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button class="close" aria-label="Fermer" @click="closeModal">×</button>
   <template v-if="modalKind==='auth'"><p class="eyebrow dark">VOTRE ESPACE MEDISLOT</p><h2 id="modal-title" tabindex="-1">{{register?'Créer votre compte':'Heureux de vous retrouver'}}</h2><p class="subtle">Connectez-vous pour confirmer et retrouver vos rendez-vous.</p>
    <template v-if="googleLogin"><button type="button" class="google-button" :aria-disabled="googleBusy" @click="loginWithGoogle"><svg aria-hidden="true" viewBox="0 0 48 48" width="20" height="20"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>{{googleBusy?'Redirection vers Google…':'Continuer avec Google'}}</button><p class="auth-separator"><span>ou avec votre e-mail</span></p></template>
