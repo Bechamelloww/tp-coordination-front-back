@@ -83,9 +83,12 @@ public class TenantFilter extends OncePerRequestFilter {
   Optional<AppUser> user = users.findByEmail(auth.getName());
   if (user.isEmpty()) return Access.NONE;
   if (AppUser.MASTER.equals(user.get().role)) return Access.ADMIN;
-  return memberships.findByUserIdAndClinicId(user.get().id, clinic.id)
-   .map(m -> Membership.ADMIN.equals(m.role) ? Access.ADMIN : Access.MEMBER)
-   .orElse(Access.NONE);
+  Optional<Membership> membership = memberships.findByUserIdAndClinicId(user.get().id, clinic.id);
+  if (membership.isPresent() && Membership.ADMIN.equals(membership.get().role)) return Access.ADMIN;
+  // Gérant : limité aux cabinets qu'il administre (404 ailleurs, comme un cabinet inconnu).
+  if (memberships.existsByUserIdAndRole(user.get().id, Membership.ADMIN)) return Access.NONE;
+  // Patient : voit tous les cabinets ; il devient membre de celui où il réserve.
+  return membership.isPresent() ? Access.MEMBER : Access.PUBLIC;
  }
 
  private void grantClinicAdmin(Authentication auth) {

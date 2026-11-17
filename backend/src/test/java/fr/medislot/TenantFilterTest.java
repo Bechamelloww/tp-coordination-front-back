@@ -46,6 +46,7 @@ class TenantFilterTest {
   admin.id = 20L;
   when(users.findByEmail("admin@medislot.test")).thenReturn(Optional.of(admin));
   when(memberships.findByUserIdAndClinicId(20L, 1L)).thenReturn(Optional.of(membership(20L, 1L, Membership.ADMIN)));
+  when(memberships.existsByUserIdAndRole(20L, Membership.ADMIN)).thenReturn(true);
   AppUser master = new AppUser();
   master.id = 30L;
   master.role = AppUser.MASTER;
@@ -128,9 +129,17 @@ class TenantFilterTest {
   assertEquals(1L, seenInChain.get());
  }
 
- @Test void unNonMembreAUn404SansSavoirSiLeCabinetExiste() throws Exception {
+ @Test void unPatientOuvreAussiUnCabinetDontIlNEstPasMembre() throws Exception {
   signIn("camille@medislot.test");
-  run(request("/api/appointments", "cabinet-b"));
+  run(request("/api/professionals", "cabinet-b"));
+  assertEquals(200, res.getStatus());
+  assertEquals(2L, seenInChain.get());
+  assertFalse(adminInChain.get());
+ }
+
+ @Test void unCompteInconnuAUn404() throws Exception {
+  signIn("fantome@medislot.test");
+  run(request("/api/appointments", "cabinet-a"));
   assertEquals(404, res.getStatus());
   assertNull(seenInChain.get());
  }
