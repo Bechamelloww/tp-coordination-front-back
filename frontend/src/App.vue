@@ -78,12 +78,7 @@ function message(e:unknown){return e instanceof TypeError?'Connexion impossible.
 const upcomingByProfessional=computed(()=>upcomingByPro(appointments.value,Date.now(),moveId.value));
 async function refreshAppointments(){if(!session.user)return;appointments.value=await api<Appointment[]>(global.value?'/me/appointments':'/appointments');}
 async function refreshNotices(){if(!session.user)return;const list=await api<Notice[]>(global.value?'/me/notifications':'/notifications');notices.value=list.map(n=>!n.readAt&&seenNoticeIds.has(n.id)?{...n,readAt:new Date().toISOString()}:n);}
-async function markNoticesRead(ids:number[]){
- ids.forEach(id=>seenNoticeIds.add(id));
- const readAt=new Date().toISOString();
- notices.value=notices.value.map(n=>ids.includes(n.id)&&!n.readAt?{...n,readAt}:n);
- await api(global.value?'/me/notifications/read':'/notifications/read',{method:'POST',body:JSON.stringify({ids})}).catch(()=>{});
-}
+async function markNoticesRead(ids:number[]){ids.forEach(id=>seenNoticeIds.add(id));const readAt=new Date().toISOString();notices.value=notices.value.map(n=>ids.includes(n.id)&&!n.readAt?{...n,readAt}:n);await api(global.value?'/me/notifications/read':'/notifications/read',{method:'POST',body:JSON.stringify({ids})}).catch(()=>{});}
 // Temps 1 : choisir un créneau ouvre le formulaire (après connexion si besoin).
 function choose(professional:Professional,slot:Slot){success.value='';error.value='';profile.value=null;
  if(global.value)clinic.focus(professional.clinicSlug);
