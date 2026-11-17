@@ -5,6 +5,7 @@ import fr.medislot.repository.UserRepository;
 import fr.medislot.tenant.TenantFilter;
 import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.*;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.userdetails.*;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -12,14 +13,16 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 @Configuration
 public class SecurityConfig {
  @Bean PasswordEncoder encoder(){return new BCryptPasswordEncoder();}
  @Bean UserDetailsService users(UserRepository users){return email -> users.findByEmail(email.toLowerCase(java.util.Locale.ROOT)).map(u->User.withUsername(u.email).password(u.password).roles(u.role).build()).orElseThrow(()->new UsernameNotFoundException("Identité inconnue"));}
  @Bean SecurityFilterChain filter(HttpSecurity http,ClinicRepository clinics,MembershipRepository memberships,UserRepository users,LoginAttempts attempts) throws Exception {
+  var loginRequest=PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST,"/api/login");
   http.addFilterBefore((request,response,chain)->{
     var req=(jakarta.servlet.http.HttpServletRequest)request;var res=(jakarta.servlet.http.HttpServletResponse)response;
-    if("POST".equals(req.getMethod())&&"/api/login".equals(req.getRequestURI().substring(req.getContextPath().length()))&&attempts.blocked(req.getParameter("username"))){
+    if(loginRequest.matches(req)&&attempts.blocked(req.getParameter("username"))){
      res.setStatus(429);res.setHeader("Retry-After",String.valueOf(LoginAttempts.WINDOW.toSeconds()));res.setContentType("application/problem+json");
      res.getWriter().write("{\"title\":\"Trop de tentatives. Réessayez dans 15 minutes.\",\"status\":429}");return;
     }
