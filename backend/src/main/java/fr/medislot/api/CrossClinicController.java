@@ -45,8 +45,15 @@ public class CrossClinicController {
 
  /** 30 dernières notifications du patient connecté, tous cabinets confondus. */
  @GetMapping("/me/notifications") public List<AppointmentController.NotificationDto> notifications(Principal principal){
-  return jdbc.query("select id,message,created_at from notification where patient_id=? order by created_at desc limit 30",
-   (rs,i)->new AppointmentController.NotificationDto(rs.getLong("id"),rs.getString("message"),rs.getTimestamp("created_at").toInstant()),patient(principal));
+  return jdbc.query("select id,message,created_at,read_at from notification where patient_id=? order by created_at desc limit 30",
+   (rs,i)->new AppointmentController.NotificationDto(rs.getLong("id"),rs.getString("message"),rs.getTimestamp("created_at").toInstant(),
+    rs.getTimestamp("read_at")==null?null:rs.getTimestamp("read_at").toInstant()),patient(principal));
+ }
+
+ /** Marque comme lues des notifications du patient connecté, quel que soit leur cabinet (les autres identifiants sont ignorés). */
+ @PostMapping("/me/notifications/read") public org.springframework.http.ResponseEntity<Void> markRead(Principal principal,@jakarta.validation.Valid @RequestBody AppointmentController.MarkReadRequest r){
+  if(!r.ids().isEmpty())jdbc.update("update notification set read_at=now() where patient_id=? and read_at is null and id = any(?)",patient(principal),r.ids().toArray(Long[]::new));
+  return org.springframework.http.ResponseEntity.noContent().build();
  }
 
  private Long patient(Principal principal){return users.findByEmail(principal.getName()).orElseThrow(()->new ResponseStatusException(HttpStatus.UNAUTHORIZED,"Connexion requise.")).id;}

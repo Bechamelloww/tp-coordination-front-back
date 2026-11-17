@@ -55,6 +55,10 @@ class RolesIntegrationTest {
   call("/api/master/clinics",null,"admin-a@medislot.test","PATIENT").andExpect(status().isForbidden());
  }
 
+ @Test void unMasterRetrogradeEnBaseNAccedePlusALaVueGlobale() throws Exception {
+  call("/api/master/clinics",null,"admin-a@medislot.test","MASTER").andExpect(status().isForbidden());
+ }
+
  @Test void leSelecteurDonneLeRoleDansChaqueCabinet() throws Exception {
   call("/api/me/clinics",null,"admin-a@medislot.test","PATIENT").andExpect(jsonPath("$[0].slug").value("cabinet-a")).andExpect(jsonPath("$[0].role").value("ADMIN"));
   call("/api/me/clinics",null,"patient@medislot.test","PATIENT").andExpect(jsonPath("$[*].role",everyItem(is("MEMBER"))));

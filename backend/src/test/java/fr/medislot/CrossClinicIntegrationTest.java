@@ -47,7 +47,15 @@ class CrossClinicIntegrationTest {
   jdbc.update("insert into notification(patient_id,message,created_at,clinic_id) values (?,'Bienvenue au Canal',now(),?)",autre,clinicB);
   mvc.perform(get("/api/me/appointments").with(user("autre@medislot.test").roles("PATIENT"))).andExpect(status().isOk())
    .andExpect(jsonPath("$[*].clinicSlug",hasItem("cabinet-b"))).andExpect(jsonPath("$[*].slotId",hasItem(slot.intValue())));
-  mvc.perform(get("/api/me/notifications").with(user("autre@medislot.test").roles("PATIENT"))).andExpect(jsonPath("$[*].message",hasItem("Bienvenue au Canal")));
+  mvc.perform(get("/api/me/notifications").with(user("autre@medislot.test").roles("PATIENT"))).andExpect(jsonPath("$[*].message",hasItem("Bienvenue au Canal")))
+   .andExpect(jsonPath("$[?(@.message=='Bienvenue au Canal')].readAt",contains(nullValue())));
+  Long notice=jdbc.queryForObject("select id from notification where message='Bienvenue au Canal'",Long.class);
+  mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/me/notifications/read").with(user("patient@medislot.test").roles("PATIENT"))
+   .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf()).contentType("application/json").content("{\"ids\":["+notice+"]}")).andExpect(status().isNoContent());
+  org.junit.jupiter.api.Assertions.assertNull(jdbc.queryForObject("select read_at from notification where id=?",java.sql.Timestamp.class,notice),"un autre patient ne peut pas la marquer lue");
+  mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/me/notifications/read").with(user("autre@medislot.test").roles("PATIENT"))
+   .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf()).contentType("application/json").content("{\"ids\":["+notice+"]}")).andExpect(status().isNoContent());
+  org.junit.jupiter.api.Assertions.assertNotNull(jdbc.queryForObject("select read_at from notification where id=?",java.sql.Timestamp.class,notice));
   mvc.perform(get("/api/me/appointments").with(user("patient@medislot.test").roles("PATIENT"))).andExpect(jsonPath("$[*].slotId",not(hasItem(slot.intValue()))));
   mvc.perform(get("/api/me/appointments")).andExpect(status().isUnauthorized());
  }
