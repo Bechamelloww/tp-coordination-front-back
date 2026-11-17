@@ -40,6 +40,27 @@ async function createClinic(){
  }catch(e){formError.value=e instanceof Error?e.message:'Création impossible.';if(e instanceof ApiError)fieldErrors.value=e.fields}
  finally{saving.value=false}
 }
+
+// Ajout d'un membre au cabinet affiché. Le master choisit dans la liste des comptes ; un admin saisit l'e-mail
+// (il ne doit pas voir les comptes des autres cabinets).
+const isMaster=()=>session.user?.role==='MASTER';
+const adding=ref(false),addingBusy=ref(false),newMember=ref({email:'',role:'MEMBER'}),addError=ref(''),addErrors=ref<Record<string,string>>({}),added=ref('');
+const candidates=ref<{email:string;name:string}[]>([]);
+function openAdd(){
+ adding.value=true;added.value='';addError.value='';addErrors.value={};newMember.value={email:'',role:'MEMBER'};
+ if(isMaster())api<{email:string;name:string}[]>('/master/accounts').then(a=>{const known=new Set(members.value.map(m=>m.email));candidates.value=a.filter(x=>!known.has(x.email))}).catch(()=>{candidates.value=[]});
+}
+async function addMember(){
+ if(addingBusy.value)return;addingBusy.value=true;addError.value='';addErrors.value={};
+ try{
+  const m=await api<Member>('/admin/members',{method:'POST',body:JSON.stringify(newMember.value)});
+  members.value=[...members.value,m].sort((a,b)=>a.role===b.role?a.name.localeCompare(b.name):a.role==='ADMIN'?-1:1);
+  if(overview.value)overview.value={...overview.value,members:overview.value.members+1,admins:overview.value.admins+(m.role==='ADMIN'?1:0)};
+  adding.value=false;added.value=`${m.name} a été ajouté${m.role==='ADMIN'?' comme admin':''}.`;
+ }catch(e){addError.value=e instanceof Error?e.message:'Ajout impossible.';if(e instanceof ApiError)addErrors.value=e.fields}
+ finally{addingBusy.value=false}
+}
+watch(()=>clinic.current?.slug,()=>{adding.value=false;added.value=''});
 </script>
 <template>
  <div class="admin">
@@ -87,7 +108,18 @@ async function createClinic(){
    </table></div>
   </section>
   <section class="admin-block" aria-labelledby="admin-members">
-   <h2 id="admin-members">Membres du cabinet</h2>
+   <div class="admin-block-head"><h2 id="admin-members">Membres du cabinet</h2><button v-if="!adding" class="secondary" @click="openAdd">Ajouter un membre</button></div>
+   <div role="status"><p v-if="added" class="alert success">{{added}}</p></div>
+   <form v-if="adding" class="admin-form" novalidate @submit.prevent="addMember">
+    <h3>Ajouter un membre</h3>
+    <div class="admin-form-grid">
+     <div v-if="isMaster()" class="field"><label for="member-email">Compte</label><select id="member-email" v-model="newMember.email" :aria-invalid="!!addErrors.email"><option value="" disabled>Choisir un compte</option><option v-for="a in candidates" :key="a.email" :value="a.email">{{a.name}} — {{a.email}}</option></select><p v-if="addErrors.email" class="error-text">{{addErrors.email}}</p></div>
+     <div v-else class="field"><label for="member-email">E-mail du compte</label><input id="member-email" v-model="newMember.email" type="email" autocomplete="off" placeholder="nom@exemple.fr" aria-describedby="member-email-hint" :aria-invalid="!!addErrors.email"><p id="member-email-hint" class="hint">La personne doit déjà avoir un compte MediSlot.</p><p v-if="addErrors.email" class="error-text">{{addErrors.email}}</p></div>
+     <div class="field"><label for="member-role">Rôle</label><select id="member-role" v-model="newMember.role"><option value="MEMBER">Patient</option><option value="ADMIN">Admin du cabinet</option></select></div>
+    </div>
+    <p role="alert" class="error-text"><template v-if="addError">{{addError}}</template></p>
+    <div class="admin-form-actions"><button type="submit" class="primary" :aria-disabled="addingBusy">{{addingBusy?'Ajout…':'Ajouter au cabinet'}}</button><button type="button" class="text-button" @click="adding=false">Annuler</button></div>
+   </form>
    <div class="admin-table"><table>
     <thead><tr><th scope="col">Nom</th><th scope="col">E-mail</th><th scope="col">Rôle</th></tr></thead>
     <tbody><tr v-for="m in members" :key="m.id"><td>{{m.name}}</td><td>{{m.email}}</td><td><span v-if="m.role==='ADMIN'" class="clinic-role">Admin</span><template v-else>Patient</template></td></tr></tbody>
